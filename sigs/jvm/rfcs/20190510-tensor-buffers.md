@@ -48,11 +48,11 @@ with Android team if it is ok now to switch to Java 8 if the TF Java remains in 
 
 ### Tensor I/O Utilities
 
-A new utility library (`org.tensorflow:tensorflow-util`) will be distributed with the TensorFlow Java client and
+A new set of utilitieswill be distributed with the TensorFlow Java client that
 will include a series of interfaces and classes that improve read and write operations in a tensor data structure,
 normally represented as a multidimensional arrays.
 
-The <code><i>Type</i>Tensor</code> interfaces are the center of this new set of utilities (should not to be confused 
+The <code><i>Type</i>Tensor</code> interfaces are the core of this new framework (should not to be confused 
 with the existing `Tensor<>` class in TF Java, which is in fact just a symbolic handle to a tensor allocated by
 TensorFlow). For each tensor datatype supported in Java, a <code><i>Type</i>Tensor</code> interface variant is 
 provided, allowing users to work with Java primitive types which tends to be less memory-consuming and 
@@ -61,9 +61,15 @@ provide better performances than their autoboxed equivalent.
 For readability, only the `Double` variant of this interface is shown below:
 ```java
 interface DoubleTensor {
+  default DoubleTensor createDense(long[] shape) { return new TFDenseDoubleTensor(shape); }
+  default DoubleTensor createSparse(long[] shape) { return new TFSparseDoubleTensor(shape); }
+  default DoubleTensor createRagged(long[] shape) { return new TFRaggedDoubleTensor(shape); }
+
+  Tensor<Double> asTFTensor();  // return TF handle of this tensor
   int rank();  // number of dimensions (or rank) of this tensor
   long size(int dimension);  // number of elements in the given dimension
   long totalSize();  // total number of elements in this tensor
+  
   DoubleTensor slice(int... indices);  // returns a slice of this tensor
   DoubleTensor slice(TensorIndex... indices);  // returns a slice of this tensor, using various types of indices
   Iterable<DoubleTensor> elements();  // iterates through the elements of the first axis of this tensor
@@ -78,11 +84,11 @@ interface DoubleTensor {
   void read(OutputStream ostream);  // read elements of this tensor across all dimensions into `ostream` 
   
   // Write operations
-  void put(double value, int... indices);  // set the scalar value of this rank-0 tensor (or a slice of)
-  void put(DoubleStream stream, int... indices);  // copy elements of `stream` into this tensor
-  void put(DoubleBuffer buffer, int... indices);  // copy elements of `buffer` into this tensor
-  void put(double[] array, int... indices);  // copy elements of `array` into this tensor
-  void put(DoubleTensor tensor, int... indices);  // copy elements of `tensor` into this tensor
+  void set(double value, int... indices);  // set the scalar value of this rank-0 tensor (or a slice of)
+  void set(DoubleStream stream, int... indices);  // copy elements of `stream` into this tensor
+  void set(DoubleBuffer buffer, int... indices);  // copy elements of `buffer` into this tensor
+  void set(double[] array, int... indices);  // copy elements of `array` into this tensor
+  void set(DoubleTensor tensor, int... indices);  // copy elements of `tensor` into this tensor
   void write(InputStream istream);  // write elements of this tensor across all dimensions from `istream`
 }
 
@@ -116,7 +122,7 @@ methods in `TensorIndex`, which return an instance of the same class:
 * `range(int start, int end)`: matches all elements whose indices is between `start` and `end`
 * `even()`, `odd()`: matches only elements at even/odd indices
 * `mod(int m)`: matches only elements whose indices is a multiple of `m`
-Note that `IntTensor` and `LongTensor` will also implement the `TensorIndex` interface, to allow indexation
+* `IntTensor` and `LongTensor` will also implement the `TensorIndex` interface, to allow indexation
 using rank-0 or rank-1 tensors.
 
 Ex: let `tensor` be a 3D matrix on `(x, y, z)`
@@ -133,16 +139,15 @@ tensor.slice(at(0), vector);  // return slice at x=0, y=vector.get(0), z=vector.
 Finally, the `elements()` and `scalars()` methods simplifies sequential operation over the elements of a tensor,
 avoiding the user to increment manually an iterator.
 
-Ex: let `tensor` be a 3D matrix
+Ex: let `vector` be a vector or 3 elements
 ```java
 double d = 0.0;
-for (DoubleTensor vector: tensor.elements()) {
-  vector.scalars().onEach(() -> d++);
+vector.scalars().onEach(() -> d++);  // vector is [0.0, 1.0, 2.0]
+vector.scalars().forEach(System.out::println);  // prints "0.0", "1.0", "2.0"
+vector.scalars().put(10.0f).put(20.0f).put(30.0f);  vector is [10.0, 20.0, 30.0]
+for (DoubleTensor scalar : vector.elements()) {
+  System.out::println(scalar.get());  // prints "10.0", "20.0", "30.0"
 }
-for (DoubleTensor vector: tensor.elements()) {
-  vector.scalars().forEach(System.out::println);
-}
-tensor.slice(0).put(10.0f).put(20.0f).put(30.0f);
 ```
 See the last section for some more usage examples.
 
@@ -156,6 +161,12 @@ and copied to the tensor memory (see [this link](https://github.com/tensorflow/t
 Assuming that the shape of the tensor is predetermined, this data copy and additional memory allocation can be avoided by 
 writing the data to the tensor memory directly. This only also only possible for datatypes whose length is fixed. For
 variable-length datatypes (like strings), data must be first collected in order to compute the size in bytes of the tensor.
+
+To allocate such tensor, the `createDense()` factory of the <code><i>Type</i>Tensor</code> class should be used:
+```java
+DoubleTensor matrix = DoubleTensor.createDense(new long[]{2, 2});
+```
+
 
 Following factories will be added to the `Tensors` class:
 ```java
@@ -180,8 +191,12 @@ The last factory allow the creation of tensors of variable-length strings. The `
 A sparse tensor is a collection of 3 dense tensors (indices, values and dense shape). Actually there is no
 other way in TF Java to allocate such tensor than allocating and manipulating individually the 3 tensors.
 
-We can simplify this process by following the same approach as dense tensors and adding those
-factories to the `Tensors` class:
+We can simplify this process by following the same approach as dense tensors and use the same 
+<code><i>Type</i>Tensor</code> interface, by allocating the tensor with the factory method `createSparse()`:
+```java
+DoubleTensor matrix = DoubleTensor.createSparse(new long[]{2, 2});
+```
+
 ```java
 public static SparseTensor<Float> sparseFloat(long[] shape, int numValues, Consumer<FloatTensor> dataInit);
 public static SparseTensor<Double> sparseDouble(long[] shape, int numValues, Consumer<DoubleTensor> dataInit);
@@ -203,6 +218,14 @@ tensor buffers are allocated and initialized.
 
 A ragged tensor is a tensor that is composed of one or more ragged or dense tensors. Ragged tensors allow
 users to work with variable-length elements in any dimension (except of the first). 
+
+Once again, we can simplify this process by following the same approach as dense tensors and use the same 
+<code><i>Type</i>Tensor</code> interface, by allocating the tensor with the factory method `createRagged()`:
+```java
+DoubleTensor matrix = DoubleTensor.createRagged(new long[]{2, 2});
+```
+
+
 
 To support those tensors as well, following factories can be added to the `Tensors` class:
 ```java
