@@ -61,11 +61,6 @@ provide better performances than their autoboxed equivalent.
 For readability, only the `Double` variant of this interface is shown below:
 ```java
 interface DoubleTensor {
-  default DoubleTensor createDense(long[] shape) { return new TFDenseDoubleTensor(shape); }
-  default DoubleTensor createSparse(long[] shape) { return new TFSparseDoubleTensor(shape); }
-  default DoubleTensor createRagged(long[] shape) { return new TFRaggedDoubleTensor(shape); }
-
-  Tensor<Double> asTFTensor();  // return TF handle of this tensor
   int rank();  // number of dimensions (or rank) of this tensor
   long size(int dimension);  // number of elements in the given dimension
   long totalSize();  // total number of elements in this tensor
@@ -162,10 +157,22 @@ Assuming that the shape of the tensor is predetermined, this data copy and addit
 writing the data to the tensor memory directly. This only also only possible for datatypes whose length is fixed. For
 variable-length datatypes (like strings), data must be first collected in order to compute the size in bytes of the tensor.
 
-To allocate such tensor, the `createDense()` factory of the <code><i>Type</i>Tensor</code> class should be used:
+For each datatype supported by TensorFlow, a <code>Dense<i>Type</i>Tensor</code> will be available and can be instantiated
+calling (one of) its factory:
 ```java
-DoubleTensor matrix = DoubleTensor.createDense(new long[]{2, 2});
+final class DenseDoubleTensor implements DoubleTensor, Closeable {
+  public static DenseDoubleTensor create(long[] shape) {
+    return new DenseDoubleTensor(shape);
+  }
+  public Tensor<Double> toTFTensor() {
+    return tensor;
+  }
+  // implement DoubleTensor interface using tensor.buffer();
+  private Tensor<Double> tensor;
+}
+DoubleTensor tensor = DenseDoubleTensor.create(new long[]{2, 2});
 ```
+
 
 
 Following factories will be added to the `Tensors` class:
@@ -338,52 +345,55 @@ operator fun <T> Operand<T>.plus(tensor: Operand<T>): Operand<T> {
 ### Example of usage for NdArrays
 
 ```java
-// Creating tensors and writing data
 
-Tensor<Boolean> scalar = Tensors.createBoolean(new long[0], data -> {
-  // Setting scalar value directly
-  data.put(true);
-});
+// Creating boolean scalar
+BooleanTensor scalar = new DenseBooleanTensor(Shape.scalar());
 
 scalar.rank();  // 0
 scalar.size(0);  // error
 scalar.totalSize();  // 1
 
-Tensor<Integer> vector = Tensors.createInt(new long[]{4}, data -> {
-  // Setting first elements from array and add last element directly
-  data.put(new int[]{1, 2, 3}, 0);
-  data.put(4, 3); 
-});
+// Setting scalar value
+scalar.set(true);
+
+// Creating integer vector
+IntTensor vector = new DenseIntTensor(new long[]{4});
 
 vector.rank();  // 1
 vector.size(0);  // 4
 vector.totalSize();  // 4
 
-Tensor<Float> matrix = Tensors.createFloat(new long[]{2, 3}, data -> {
-  // Initializing data using iterators
-  Iterator<FloatTensor> rows = data.elements();
-  rows.put(new float[]{0.0f, 5.0f, 10.0f});  // inits data at the current row (0)
-  FloatIterator secondRow = rows.scalars();  // returns a new cursor at the current row (1)
-  secondRow.put(15.0f);  // inits each scalar of the second row individually...
-  secondRow.put(20.0f);
-  secondRow.put(25.0f);
-});
+// Setting first elements from array and add last element directly
+vector.set(new int[]{1, 2, 3}, 0);
+vector.set(4, 3); 
+
+// Creating float matrix
+FloatTensor matrix = new DenseFloatTensor(new long[]{2, 3});
 
 matrix.rank();  // 2
 matrix.size(0);  // 2
 matrix.totalSize();  // 6
 
-Tensor<Float> matrix3d = Tensors.createDouble(new long[]{2, 2, 3}, data -> {
-  // Initialize all data from a flat 3d matrix: 
-  // {{{10.0, 10.1, 10.2}, {11.0, 11.1, 11.2}}, {{20.0, 20.1, 20.1}, {21.0, 21.1, 21.2}}}
-  data.put(DoubleStream.of(10.0, 10.1, 10.2, 11.0, 11.1, 11.2, 20.0, 20.1, 20.2, 21.0, 21.1, 21.2)); 
-});
+// Initializing data using iterators
+Iterator<FloatTensor> rows = data.elements();
+rows.put(new float[]{0.0f, 5.0f, 10.0f});  // inits data at the current row (0)
+FloatIterator secondRow = rows.scalars();  // returns a new cursor at the current row (1)
+secondRow.put(15.0f);  // inits each scalar of the second row individually...
+secondRow.put(20.0f);
+secondRow.put(25.0f);
+
+// Create float 3d matrix
+FloatTensor matrix3d = new DenseFloatTensor(new long[]{2, 2, 3});
 
 matrix3d.rank();  // 3
 matrix3d.size(0);  // 2
 matrix3d.totalSize();  // 12
 
-Tensor<String> text = Tensors.createString(new long[]{-1}, data -> {
+// Initialize all data from a flat 3d matrix: 
+// {{{10.0, 10.1, 10.2}, {11.0, 11.1, 11.2}}, {{20.0, 20.1, 20.1}, {21.0, 21.1, 21.2}}}
+matrix3d.set(DoubleStream.of(10.0, 10.1, 10.2, 11.0, 11.1, 11.2, 20.0, 20.1, 20.2, 21.0, 21.1, 21.2)); 
+
+StringTensor<String> text = Tensors.createString(new long[]{-1}, data -> {
   // Initializing data from input stream, where `values.txt` contains following modified UTF-8 strings:
   // "in the town", "where I was", "born"
   data.write(new FileInputStream("values.txt"));
@@ -425,12 +435,12 @@ text.slice(tf.constant(1));  // {"where I was"} (rank-0 slice)
 
 // Sparse tensors
 
-SparseTensor<Float> sparseTensor = Tensors.createSparseFloat(new long[]{2, 4}, 3, data -> {
-  data.put(10.0f, 0, 0);
-  data.put(20.0f, 0, 3);
-  data.put(30.0f, 1, 1);
-  data.put(40.0f, 2, 1);  // fails, index oob
-});
+FloatTensor sparseTensor = new SparseFloatTensor(new long[]{2, 4}, 3);
+
+sparseTensor.set(10.0f, 0, 0);
+sparseTensor.set(20.0f, 0, 3);
+sparseTensor.set(30.0f, 1, 1);
+sparseTensor.set(40.0f, 2, 1);  // fails, index oob
 
 sparseTensor.get(0, 0);  // 10.0f
 sparseTensor.get(0, 1);  // 0.0f
@@ -438,7 +448,9 @@ sparseTensor.stream();  // [10.0f, 0.0f, 0.0f, 20.0f, 0.0f, 30.0f, 0.0f, 0.0f]
 
 // Ragged tensors
 
-RaggedTensor<Float> raggedTensor = Tensors.createRaggedFloat(new long[]{3, -1}, data -> {
+RaggedTensor<Float> raggedTensor = Tensors.createRaggedFloat(new long[]{3, -1});
+
+, data -> {
   data.put(10.0f, 0, 0);    
   data.put(20.0f, 0, 1);
   data.put(30.0f, 0, 2); 
