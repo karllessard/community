@@ -161,16 +161,18 @@ For each datatype supported by TensorFlow, a <code>Dense<i>Type</i>Tensor</code>
 calling (one of) its factory:
 ```java
 final class DenseDoubleTensor implements DoubleTensor, Closeable {
-  public static DenseDoubleTensor create(long[] shape) {
-    return new DenseDoubleTensor(shape);
+  DenseDoubleTensor(Tensor<Double> tensor) {
+    this.tensor = tensor;
+    buffer = tensor.buffer().asDoubleBuffer();
   }
   public Tensor<Double> toTFTensor() {
     return tensor;
   }
-  // implement DoubleTensor interface using tensor.buffer();
+  // implement DoubleTensor interface writing from and reading to `this.buffer`
   private Tensor<Double> tensor;
+  private DoubleBuffer buffer;
 }
-DoubleTensor tensor = DenseDoubleTensor.create(new long[]{2, 2});
+DoubleTensor tensor = Tensors.tensorOfDouble(new long[]{2, 2});
 ```
 
 
