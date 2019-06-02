@@ -48,7 +48,7 @@ with Android team if it is ok now to switch to Java 8 if the TF Java remains in 
 
 ### Tensor I/O Utilities
 
-A new utility library (`org.tensorflow:data-utils`) will be distributed with the TensorFlow Java client that
+A new utility library (`org.tensorflow:tensorflow-utils`) will be distributed with the TensorFlow Java client that
 will include a series of interfaces and classes that improve read and write operations in a tensor data structure,
 normally represented as a multidimensional arrays.
 
@@ -263,6 +263,16 @@ Once created, Tensors are immutable and their data could not be modified anymore
 data from a tensor, the user needs to create a temporary buffer into which its data is copied. Again, this 
 data copy and additional memory allocation can be avoided by accessing the tensor buffer 
 directly when reading its data.
+
+
+```java
+// todo graph execution
+
+// Eager execution
+import static org.tensorflow.util.Tensors.*;
+
+DoubleTensor tensor = asTensor(tf.math.add(matrix1, matrix2));
+```
 
 The following methods will be added to the `Tensor` class:
 ```java
