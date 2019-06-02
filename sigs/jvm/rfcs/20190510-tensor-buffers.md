@@ -271,7 +271,7 @@ directly when reading its data.
 // Eager execution
 import static org.tensorflow.util.Tensors.*;
 
-DoubleTensor tensor = asTensor(tf.math.add(matrix1, matrix2));
+DoubleTensor tensor = tensorOf(tf.math.add(matrix1, matrix2));
 ```
 
 The following methods will be added to the `Tensor` class:
