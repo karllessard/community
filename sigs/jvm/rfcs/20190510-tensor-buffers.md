@@ -48,11 +48,11 @@ with Android team if it is ok now to switch to Java 8 if the TF Java remains in 
 
 ### Tensor I/O Utilities
 
-A new set of utilitieswill be distributed with the TensorFlow Java client that
+A new utility library (`org.tensorflow:data-utils`) will be distributed with the TensorFlow Java client that
 will include a series of interfaces and classes that improve read and write operations in a tensor data structure,
 normally represented as a multidimensional arrays.
 
-The <code><i>Type</i>Tensor</code> interfaces are the core of this new framework (should not to be confused 
+The <code><i>Type</i>Tensor</code> interfaces are the core of those utilities (should not to be confused 
 with the existing `Tensor<>` class in TF Java, which is in fact just a symbolic handle to a tensor allocated by
 TensorFlow). For each tensor datatype supported in Java, a <code><i>Type</i>Tensor</code> interface variant is 
 provided, allowing users to work with Java primitive types which tends to be less memory-consuming and 
@@ -157,10 +157,11 @@ Assuming that the shape of the tensor is predetermined, this data copy and addit
 writing the data to the tensor memory directly. This only also only possible for datatypes whose length is fixed. For
 variable-length datatypes (like strings), data must be first collected in order to compute the size in bytes of the tensor.
 
-For each datatype supported by TensorFlow, a <code>Dense<i>Type</i>Tensor</code> will be available and can be instantiated
-calling (one of) its factory:
+To create a densor tensor, new methods called <code>tensorOf<i>Type</i></code> will be added a new 
+`org.tensorflow.util.Tensors` factory class that will instantiate a <code>Dense<i>Type</i>Tensor</code>
+implementation of a tensor:
 ```java
-final class DenseDoubleTensor implements DoubleTensor, Closeable {
+final class DenseDoubleTensor implements DoubleTensor, Closeable, Operand<Double> {
   DenseDoubleTensor(Tensor<Double> tensor) {
     this.tensor = tensor;
     buffer = tensor.buffer().asDoubleBuffer();
@@ -172,7 +173,10 @@ final class DenseDoubleTensor implements DoubleTensor, Closeable {
   private Tensor<Double> tensor;
   private DoubleBuffer buffer;
 }
-DoubleTensor tensor = Tensors.tensorOfDouble(new long[]{2, 2});
+
+import static org.tensorflow.util.Tensors.*;
+
+DoubleTensor tensor = tensorOfDouble(new long[]{2, 2});
 ```
 
 
