@@ -181,8 +181,7 @@ final class DenseDoubleTensor implements DoubleTensor, AutoCloseable {
   public Tensor<Double> toTensor() {  // tensor to be passed in TensorFlow operations
     return tensor;
   }
-  @Override
-  void close() {
+  @Override public void close() {
     tensor.close();
   }
   // implement DoubleTensor interface writing from and reading to `buffer`...
@@ -233,38 +232,44 @@ public static SparseStringTensor sparseTensorOfString(long[] shape, int numValue
 public static SparseArrayStringTensor sparseTensorOfString(long[] shape, int numValues);
 ```
 This time, not only the shape is known in advance but also the number of values that will actually be set in the
-sparse tensor. The <code>Sparse<i>Type</i>Tensor</code> implementations will allocates 3 dense tensors in total, that
-will contain the <i>indices</i>, the <i>values</i> and the <i>dense shape</i> of the tensor. Again, let's use the
-`Double` variant as an example:
+sparse tensor. The `SparseTensor<>` class will allocates 3 dense tensors in total: the <i>indices</i>, the <i>values</i> and 
+the <i>dense shape</i> of the tensor. This tensor handle is then wrapped by a <code>Sparse<i>Type</i>Tensor</code>. Again, 
+let's use the `Double` variant as an example:
 ```java
-final class SparseDoubleTensor implements DoubleTensor, AutoCloseable {
-  SparseDoubleTensor(long[] shape) {
+final class SparseTensor<T> implements AutoCloseable {
+  public final Tensor<Long> indices;
+  public final Tensor<Double> values;
+  public final Tensor<Long> denseShape;
+  
+  SparseTensor(long[] shape) {
     indices = Tensor.create(Long.class, new long[]{numDims(shape), numValues});
     values = Tensor.create(Double.class, new long[]{numValues});
     denseShape = Tensors.create(shape);
-    indicesBuffer = indices.buffer().asLongBuffer();
-    valuesBuffer = values.buffer().asDoubleBuffer();
-  }  
-  public Tensor<Long> indexTensor() {  // tensor to be passed as the indices of a sparse tensor in a TF operation
-    return indices;
   }
-  public Tensor<Double> valueTensor() {  // tensor to be passed as the values of a sparse tensor in a TF operation
-    return values;
-  }
-  public Tensor<Long> denseShapeTensor() {  // tensor to be passed as the shape of a sparse tensor in a TF operation
-    return denseShape;
-  }
-  @Override
-  void close() {
+  @Override public void close() {
     indices.close();
     values.close();
     denseShape.close();
   }
-  // implement DoubleTensor interface writing from and reading to `indicesBuffer` and `valuesBuffer`...
-
   private Tensor<Long> indices;
   private Tensor<Double> values;
   private Tensor<Long> denseShape;
+}
+
+final class SparseDoubleTensor implements DoubleTensor, AutoCloseable {
+  SparseDoubleTensor(long[] shape) {
+    tensor = new SparseTensor(shape);
+    indicesBuffer = tensor.indices.buffer().asLongBuffer();
+    valuesBuffer = tensor.values.buffer().asDoubleBuffer();
+  }  
+  public SparseTensor<Double> toTensor() {  // structure whose fields can be passed in a TF operations
+    return tensor;
+  }
+  @Override public void close() {
+    tensor.close();
+  }
+  // implement DoubleTensor interface writing from and reading to `indicesBuffer` and `valuesBuffer`...
+
   private LongBuffer indicesBuffer;
   private DoubleBuffer valuesBuffer;
 }
@@ -277,68 +282,53 @@ the data will be collected in an array first before being copied to a real tenso
 A ragged tensor is a tensor that is composed of one or more ragged or dense tensors. Ragged tensors allow
 users to work with variable-length elements in any dimension (except of the first). 
 
-Once again, we can simplify this process by following the same approach as dense tensors and use the same 
-<code><i>Type</i>Tensor</code> interface, by allocating the tensor with the factory method `createRagged()`:
+We can simplify this process by following the same approach as with other types of tensors and use the same 
+<code><i>Type</i>Tensor</code> interfaces. Following methods will be added to the `org.tensorflor.util.Tensors` class
+to allocate sparse tensors.
 ```java
-DoubleTensor matrix = DoubleTensor.createRagged(new long[]{2, 2});
-```
-
-
-
-To support those tensors as well, following factories can be added to the `Tensors` class:
-```java
-public static RaggedTensor<Float> raggedFloat(long[] shape, Consumer<FloatTensor> dataInit);
-public static RaggedTensor<Double> raggedDouble(long[] shape, Consumer<DoubleTensor> dataInit);
-public static RaggedTensor<Integer> raggedInt(long[] shape, Consumer<IntTensor> dataInit);
-public static RaggedTensor<Long> raggedLong(long[] shape, Consumer<LongTensor> dataInit);
-public static RaggedTensor<Boolean> raggedBoolean(long[] shape, Consumer<BooleanTensor> dataInit);
-public static RaggedTensor<UInt8> raggedUInt8(long[] shape, Consumer<ByteTensor> dataInit);
-public static RaggedTensor<String> raggedString(long[] shape, Consumer<StringTensor> dataInit);
+public static RaggedFloatTensor raggedTensorOfFloat(long[] shape);
+public static RaggedDoubleTensor raggedTensorOfDouble(long[] shape);
+public static RaggedIntTensor raggedTensorOfInt(long[] shape);
+public static RaggedLongTensor raggedTensorOfLong(long[] shape);
+public static RaggedBooleanTensor raggedTensorOfBoolean(long[] shape);
+public static RaggedByteTensor raggedTensorOfUInt8(long[] shape);
+public static RaggedStringTensor raggedTensorOfString(long[] shape);
 ```
 All ragged dimensions in the tensor have a value of `-1` in the `shape` attribute. Since ragged tensors always 
 work with variable-length values, data must be first collected before the tensor buffer is allocated 
 and initialized. 
 
-It is also important to note that in contrary to other tensors which fail if writing an element out of
-the bound of the current shape, ragged dimensions will automatically grow as elements are inserted to the tensor.
+It is also important to note that as opposed to the other type of tensors, which forbid to access an element outside the
+boundaries of the current shape, ragged dimensions will automatically grow as elements are inserted to the tensor. Let's
+take again the `Double` variant in our implementation example:
+```java
+TODO
+}
+```
 
 ### Reading Tensor Data
 
-Once created, Tensors are immutable and their data could not be modified anymore. But right now, to read
-data from a tensor, the user needs to create a temporary buffer into which its data is copied. Again, this 
-data copy and additional memory allocation can be avoided by accessing the tensor buffer 
+In the current TF Java language bindings, to read data from a tensor, the user needs to create a temporary buffer into which 
+its data is copied. Again, this data copy and additional memory allocation can be avoided by accessing the tensor buffer 
 directly when reading its data.
 
-
+Tensors are returned by TensorFlow operations in their symbolic format `Tensor<>`. To convert it to a 
+<code><i>Type</i>Tensor</code> and access directly its data, following methods will be added to the `org.tensorflow.util.Tensors`
+class:
 ```java
-// todo graph execution
-
-// Eager execution
-import static org.tensorflow.util.Tensors.*;
-
-DoubleTensor tensor = tensorOf(tf.math.add(matrix1, matrix2));
+public static ReadOnlyDenseFloatTensor tensorOf(Tensor<Float> t);
+public static ReadOnlyDenseDoubleTensor tensorOf(Tensor<Double> t);
+public static ReadOnlyDenseIntTensor tensorOf(Tensor<Integer> t);
+public static ReadOnlyDenseLongTensor tensorOf(Tensor<Long> t);
+public static ReadOnlyDenseBooleanTensor tensorOf(Tensor<Boolean> t);
+public static ReadOnlyDenseByteTensor tensorOf(Tensor<UInt8> t);
+public static ReadOnlyDenseStringTensor tensorOf(Tensor<String> t);
 ```
+As you may have noticed, the returned instance of a <code>Dense<i>Type</i>Tensor</code> does not permit write operations 
+to the tensor data since as result of a computation in TensorFlow, it is immutable.
 
-The following methods will be added to the `Tensor` class:
-```java
-public FloatTensor floatData();
-public DoubleTensor doubleData();
-public IntTensor intData();
-public LongTensor longData();
-public BooleanTensor booleanData();
-public ByteTensor uInt8Data();
-public StringTensor stringData();
-```
-It is up to the user to know which of these methods should be called on a tensor of a given type, similar
-to the `*Value()` methods of the same class.
-
-The returned tensor data should only be used for read operations and all attempt to modify the data will result
-in an error.
-
-*Note: an alternative solution would be to split the TypeTensor interfaces and classes in two types: one for 
-read-only operations and another inheriting from it for read & write. This gives more control at compile time to 
-ensure that users won't attempt to modify a read-only tensor. But it will also double the number of interfaces
-and classes in the utility library.*
+Additional helpers could be added to convert classes that wrap a `Tensor<>` into a <code><i>Type</i>Tensor, 
+e.g. `Output<>`, `Operand<>`, etc.
 
 ### User-allocated Tensors
 
