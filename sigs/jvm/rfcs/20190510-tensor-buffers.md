@@ -1,4 +1,4 @@
-# Java Tensor NIO
+# Java Tensor IO
 
 | Status        | Proposed       |
 :-------------- |:---------------------------------------------------- |
