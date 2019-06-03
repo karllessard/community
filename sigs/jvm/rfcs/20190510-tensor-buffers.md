@@ -46,17 +46,16 @@ TensorFlow (sparse and ragged) that is not explicitly supported right now by the
 current client that is configured to compile in Java 7, for supporting older Android devices. We need to confirm
 with Android team if it is ok now to switch to Java 8 if the TF Java remains in the main repository.*
 
-### Tensor I/O Utilities
+### Tensor Utilities
 
-A new utility library (`org.tensorflow:tensorflow-utils`) will be distributed with the TensorFlow Java client that
-will include a series of interfaces and classes that improve read and write operations in a tensor data structure,
+A new utility library (`org.tensorflow:tensorflow-utils`) to be distribute with the TensorFlow Java client
+will include a set of interfaces and classes that provide direct I/O access to the data buffer of a tensor in TensorFlow,
 normally represented as a multidimensional arrays.
 
-The <code><i>Type</i>Tensor</code> interfaces are the core of those utilities (should not to be confused 
-with the existing `Tensor<>` class in TF Java, which is in fact just a symbolic handle to a tensor allocated by
-TensorFlow). For each tensor datatype supported in Java, a <code><i>Type</i>Tensor</code> interface variant is 
-provided, allowing users to work with Java primitive types which tends to be less memory-consuming and 
-provide better performances than their autoboxed equivalent.
+The <code><i>Type</i>Tensor</code> interfaces are the core of new framework and work in pair with the current `Tensor<>`
+class, which is just a symbolic handle to a tensor. For each tensor datatype supported in Java, a 
+<code><i>Type</i>Tensor</code> interface variant is provided, allowing users to work with Java primitive types which 
+tends to be less memory-consuming and provide better performances than their autoboxed equivalent.
 
 For readability, only the `Double` variant of this interface is shown below:
 ```java
@@ -95,6 +94,10 @@ class DoubleIterator {
   void onEach(DoubleSupplier func);  // supply all remaining elements
 }
 ```
+The allocation of <code><i>Type</i>Tensor</code> instances can be done through the new factory class `org.tensorflow.util.Tensors`,
+a potential replacement to the current `org.tensorflow.Tensors` which could become deprecated. Methods exposed by this class
+will be described in the following sections.
+
 The <code><i>Type</i>Tensor</code> interfaces support normal integer indexation, similar to Java arrays. 
 
 Ex: let `tensor` be a matrix on `(x, y)`
@@ -144,7 +147,7 @@ for (DoubleTensor scalar : vector.elements()) {
   System.out::println(scalar.get());  // prints "10.0", "20.0", "30.0"
 }
 ```
-See the last section for some more usage examples.
+More usage examples are provided at the end of this document.
 
 ### Creating Dense Tensors
 
@@ -154,50 +157,62 @@ Currently, when creating dense tensors, temporary buffers that contains the init
 and copied to the tensor memory (see [this link](https://github.com/tensorflow/tensorflow/blob/a6003151399ba48d855681ec8e736387960ef06e/tensorflow/java/src/main/java/org/tensorflow/Tensor.java#L187) for example). 
 
 Assuming that the shape of the tensor is predetermined, this data copy and additional memory allocation can be avoided by 
-writing the data to the tensor memory directly. This only also only possible for datatypes whose length is fixed. For
-variable-length datatypes (like strings), data must be first collected in order to compute the size in bytes of the tensor.
-
+writing the data to the tensor memory directly. This only also only possible for datatypes whose length is fixed.
 To create a densor tensor, new methods called <code>tensorOf<i>Type</i></code> will be added a new 
-`org.tensorflow.util.Tensors` factory class that will instantiate a <code>Dense<i>Type</i>Tensor</code>
-implementation of a tensor:
+`org.tensorflow.util.Tensors` factory class, as follow:
 ```java
-final class DenseDoubleTensor implements DoubleTensor, Closeable, Operand<Double> {
-  DenseDoubleTensor(Tensor<Double> tensor) {
-    this.tensor = tensor;
+public static DenseFloatTensor tensorOfFloat(long[] shape);
+public static DenseDoubleTensor tensorOfDouble(long[] shape);
+public static DenseIntTensor tensorOfInt(long[] shape);
+public static DenseLongTensor tensorOfLong(long[] shape);
+public static DenseBooleanTensor tensorOfBoolean(long[] shape);
+public static DenseByteTensor tensorOfUInt8(long[] shape);
+public static DenseStringTensor tensorOfString(long[] shape, int elementLength, byte paddingValue);
+public static DenseArrayStringTensor tensorOfString(long[] shape);
+```
+Each of those factory methods instantiate an instance of <code>Dense<i>Type</i>Tensor</code> as a implementation
+for a <code><i>Type</i>Tensor</code>. Here is what the `Double` variant may look like this:
+```java
+final class DenseDoubleTensor implements DoubleTensor, AutoCloseable {
+  DenseDoubleTensor(long[] shape) {
+    tensor = Tensor.create(Double.class, shape);  // creates an empty tensor in TensorFlow
     buffer = tensor.buffer().asDoubleBuffer();
-  }
-  public Tensor<Double> toTFTensor() {
+  }  
+  public Tensor<Double> toTensor() {  // tensor to be passed in TensorFlow operations
     return tensor;
   }
-  // implement DoubleTensor interface writing from and reading to `this.buffer`
+  @Override
+  void close() {
+    tensor.close();
+  }
+  // implement DoubleTensor interface writing from and reading to `buffer`...
+
   private Tensor<Double> tensor;
   private DoubleBuffer buffer;
 }
-
-import static org.tensorflow.util.Tensors.*;
-
-DoubleTensor tensor = tensorOfDouble(new long[]{2, 2});
 ```
-
-
-
-Following factories will be added to the `Tensors` class:
+It is important to note that for the `String` datatype, the shape is not enough to compute the size in bytes of the tensor
+to allocate. If each scalar element is of a variable-length, data must be first collected before allocating the tensor.
+In this case, we will use a different type of implementation that stores elements in a flat array before being copied to a real
+tensor buffer. Such implementation may look like this:
 ```java
-public static Tensor<Float> denseFloat(long[] shape, Consumer<FloatTensor> dataInit);
-public static Tensor<Double> denseDouble(long[] shape, Consumer<DoubleTensor> dataInit);
-public static Tensor<Integer> denseInt(long[] shape, Consumer<IntTensor> dataInit);
-public static Tensor<Long> denseLong(long[] shape, Consumer<LongTensor> dataInit);
-public static Tensor<Boolean> denseBoolean(long[] shape, Consumer<BooleanTensor> dataInit);
-public static Tensor<UInt8> denseUInt8(long[] shape, Consumer<ByteTensor> dataInit);
-public static Tensor<String> denseString(long[] shape, int elementLength, byte paddingValue, Consumer<StringTensor> dataInit);
-public static Tensor<String> denseString(long[] shape, Consumer<StringTensor> dataInit);
-```
-All factories except the last create an empty tensor whose memory is then directly mapped to a 
-<code><i>Type</i>Tensor</code>. This data structure is then passed to the `dataInit` function for 
-initialization. Note that for strings, this is only possible if all elements can be padded to the same length.
+final class DenseArrayStringTensor implements StringTensor {
+  DenseArrayStringTensor(long shape[]) {
+    elements = new String[numElements(shape)];
+  }
+  public Tensor<String> toTensor() {  // tensor to be passed in TensorFlow operations
+    Tensor<String> tensor = Tensor.create(String.class, shape, computeSizeInBytes());  // create empty tensor in TensorFlow
+    // fill tensor with strings offsets
+    for (String element : elements) {
+      // fill tensor with strings vararg size and value
+    }
+    return tensor;
+  }
+  // implement StringTensor interface writing from and reading to `elements`...
 
-The last factory allow the creation of tensors of variable-length strings. The `StringTensor` passed in parameter to
-`dataInit` first collects all data before allocating a tensor buffer of the right size and initializing its data.
+  private String[] elements;
+}
+```
 
 ### Creating Sparse Tensors
 
@@ -205,27 +220,57 @@ A sparse tensor is a collection of 3 dense tensors (indices, values and dense sh
 other way in TF Java to allocate such tensor than allocating and manipulating individually the 3 tensors.
 
 We can simplify this process by following the same approach as dense tensors and use the same 
-<code><i>Type</i>Tensor</code> interface, by allocating the tensor with the factory method `createSparse()`:
+<code><i>Type</i>Tensor</code> interfaces. Following methods will be added to the `org.tensorflor.util.Tensors` class
+to allocate sparse tensors.
 ```java
-DoubleTensor matrix = DoubleTensor.createSparse(new long[]{2, 2});
+public static SparseFloatTensor sparseTensorOfFloat(long[] shape, int numValues);
+public static SparseDoubleTensor sparseTensorOfDouble(long[] shape, int numValues);
+public static SparseIntTensor sparseTensorOfInt(long[] shape, int numValues);
+public static SparseLongTensor sparseTensorOfLong(long[] shape, int numValues);
+public static SparseBooleanTensor sparseTensorOfBoolean(long[] shape, int numValues);
+public static SparseByteTensor sparseTensorOfUInt8(long[] shape, int numValues);
+public static SparseStringTensor sparseTensorOfString(long[] shape, int numValues, int elementLength, byte paddingValue);
+public static SparseArrayStringTensor sparseTensorOfString(long[] shape, int numValues);
 ```
-
+This time, not only the shape is known in advance but also the number of values that will actually be set in the
+sparse tensor. The <code>Sparse<i>Type</i>Tensor</code> implementations will allocates 3 dense tensors in total, that
+will contain the <i>indices</i>, the <i>values</i> and the <i>dense shape</i> of the tensor. Again, let's use the
+`Double` variant as an example:
 ```java
-public static SparseTensor<Float> sparseFloat(long[] shape, int numValues, Consumer<FloatTensor> dataInit);
-public static SparseTensor<Double> sparseDouble(long[] shape, int numValues, Consumer<DoubleTensor> dataInit);
-public static SparseTensor<Integer> sparseInt(long[] shape, int numValues, Consumer<IntTensor> dataInit);
-public static SparseTensor<Long> sparseLong(long[] shape, int numValues, Consumer<LongTensor> dataInit);
-public static SparseTensor<Boolean> sparseBoolean(long[] shape, int numValues, Consumer<BooleanTensor> dataInit);
-public static SparseTensor<UInt8> sparseUInt8(long[] shape, int numValues, Consumer<ByteTensor> dataInit);
-public static SparseTensor<String> sparseString(long[] shape, int numValues, int elementLength, int paddingValue, Consumer<StringTensor> dataInit);
-public static SparseTensor<String> sparseString(long[] shape, int numValues, Consumer<StringTensor> dataInit);
-```
-The same <code><i>Type</i>Tensor</code> interfaces can be used to initialize sparse data. In this case, the backing implementation classes keep track of the elements that are set by writing down their 
-index in a dense tensor and their value in another. `numValues` is the number of values actually set in the 
-sparse tensor.
+final class SparseDoubleTensor implements DoubleTensor, AutoCloseable {
+  SparseDoubleTensor(long[] shape) {
+    indices = Tensor.create(Long.class, new long[]{numDims(shape), numValues});
+    values = Tensor.create(Double.class, new long[]{numValues});
+    denseShape = Tensors.create(shape);
+    indicesBuffer = indices.buffer().asLongBuffer();
+    valuesBuffer = values.buffer().asDoubleBuffer();
+  }  
+  public Tensor<Long> indexTensor() {  // tensor to be passed as the indices of a sparse tensor in a TF operation
+    return indices;
+  }
+  public Tensor<Double> valueTensor() {  // tensor to be passed as the values of a sparse tensor in a TF operation
+    return values;
+  }
+  public Tensor<Long> denseShapeTensor() {  // tensor to be passed as the shape of a sparse tensor in a TF operation
+    return denseShape;
+  }
+  @Override
+  void close() {
+    indices.close();
+    values.close();
+    denseShape.close();
+  }
+  // implement DoubleTensor interface writing from and reading to `indicesBuffer` and `valuesBuffer`...
 
-Like with dense tensors, in case of a tensor of variable-length strings, the data will be first collect before the 
-tensor buffers are allocated and initialized.
+  private Tensor<Long> indices;
+  private Tensor<Double> values;
+  private Tensor<Long> denseShape;
+  private LongBuffer indicesBuffer;
+  private DoubleBuffer valuesBuffer;
+}
+```
+Once again, it is important to note the exception with a tensor of strings with variable-length. As with dense tensors,
+the data will be collected in an array first before being copied to a real tensor buffer.
 
 ### Creating Ragged Tensors
 
