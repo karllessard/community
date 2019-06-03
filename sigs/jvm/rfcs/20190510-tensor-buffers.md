@@ -251,9 +251,6 @@ final class SparseTensor<T> implements AutoCloseable {
     values.close();
     denseShape.close();
   }
-  private Tensor<Long> indices;
-  private Tensor<Double> values;
-  private Tensor<Long> denseShape;
 }
 
 final class SparseDoubleTensor implements DoubleTensor, AutoCloseable {
