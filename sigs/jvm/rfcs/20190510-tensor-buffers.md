@@ -94,9 +94,8 @@ class DoubleIterator {
   void onEach(DoubleSupplier func);  // supply all remaining elements
 }
 ```
-The allocation of <code><i>Type</i>Tensor</code> instances can be done through the new factory class `org.tensorflow.util.Tensors`,
-a potential replacement to the current `org.tensorflow.Tensors` which could become deprecated. Methods exposed by this class
-will be described in the following sections.
+The allocation of <code><i>Type</i>Tensor</code> instances is done through a new set of factory methods
+added to `org.tensorflow.Tensors`, described in the following sections of this document.
 
 The <code><i>Type</i>Tensor</code> interfaces support normal integer indexation, similar to Java arrays. 
 
@@ -159,18 +158,18 @@ and copied to the tensor memory (see [this link](https://github.com/tensorflow/t
 Assuming that the shape of the tensor is predetermined, this data copy and additional memory allocation can be avoided by 
 writing the data to the tensor memory directly. This only also only possible for datatypes whose length is fixed.
 To create a densor tensor, new methods called <code>tensorOf<i>Type</i></code> will be added a new 
-`org.tensorflow.util.Tensors` factory class, as follow:
+`Tensors` factory class, as follow:
 ```java
-public static DenseFloatTensor tensorOfFloat(long[] shape);
-public static DenseDoubleTensor tensorOfDouble(long[] shape);
-public static DenseIntTensor tensorOfInt(long[] shape);
-public static DenseLongTensor tensorOfLong(long[] shape);
-public static DenseBooleanTensor tensorOfBoolean(long[] shape);
-public static DenseByteTensor tensorOfUInt8(long[] shape);
-public static DenseStringTensor tensorOfString(long[] shape, int elementLength, byte paddingValue);
-public static DenseArrayStringTensor tensorOfString(long[] shape);
+public static DenseFloatTensor ofFloat(long[] shape);
+public static DenseDoubleTensor ofDouble(long[] shape);
+public static DenseIntTensor ofInt(long[] shape);
+public static DenseLongTensor ofLong(long[] shape);
+public static DenseBooleanTensor ofBoolean(long[] shape);
+public static DenseByteTensor ofUInt8(long[] shape);
+public static DenseStringTensor ofString(long[] shape, int elementLength, byte paddingValue);
+public static DenseArrayStringTensor ofString(long[] shape);
 ```
-Each of those factory methods instantiate an instance of <code>Dense<i>Type</i>Tensor</code> as a implementation
+Each of these factories instantiate an instance of <code>Dense<i>Type</i>Tensor</code> as a implementation
 for a <code><i>Type</i>Tensor</code>. Here is what the `Double` variant may look like this:
 ```java
 final class DenseDoubleTensor implements DoubleTensor, AutoCloseable {
@@ -219,17 +218,17 @@ A sparse tensor is a collection of 3 dense tensors (indices, values and dense sh
 other way in TF Java to allocate such tensor than allocating and manipulating individually the 3 tensors.
 
 We can simplify this process by following the same approach as dense tensors and use the same 
-<code><i>Type</i>Tensor</code> interfaces. Following methods will be added to the `org.tensorflor.util.Tensors` class
+<code><i>Type</i>Tensor</code> interfaces. Following methods will be added to the `Tensors` class
 to allocate sparse tensors.
 ```java
-public static SparseFloatTensor sparseTensorOfFloat(long[] shape, int numValues);
-public static SparseDoubleTensor sparseTensorOfDouble(long[] shape, int numValues);
-public static SparseIntTensor sparseTensorOfInt(long[] shape, int numValues);
-public static SparseLongTensor sparseTensorOfLong(long[] shape, int numValues);
-public static SparseBooleanTensor sparseTensorOfBoolean(long[] shape, int numValues);
-public static SparseByteTensor sparseTensorOfUInt8(long[] shape, int numValues);
-public static SparseStringTensor sparseTensorOfString(long[] shape, int numValues, int elementLength, byte paddingValue);
-public static SparseArrayStringTensor sparseTensorOfString(long[] shape, int numValues);
+public static SparseFloatTensor ofSparseFloat(long[] shape, int numValues);
+public static SparseDoubleTensor ofSparseDouble(long[] shape, int numValues);
+public static SparseIntTensor ofSparseInt(long[] shape, int numValues);
+public static SparseLongTensor ofSparseLong(long[] shape, int numValues);
+public static SparseBooleanTensor ofSparseBoolean(long[] shape, int numValues);
+public static SparseByteTensor ofSparseUInt8(long[] shape, int numValues);
+public static SparseStringTensor ofSparseString(long[] shape, int numValues, int elementLength, byte paddingValue);
+public static SparseArrayStringTensor ofSparseString(long[] shape, int numValues);
 ```
 This time, not only the shape is known in advance but also the number of values that will actually be set in the
 sparse tensor. The `SparseTensor<>` class will allocates 3 dense tensors in total: the <i>indices</i>, the <i>values</i> and 
@@ -282,16 +281,16 @@ A ragged tensor is a tensor that is composed of one or more ragged or dense tens
 users to work with variable-length elements in any dimension (except of the first). 
 
 We can simplify this process by following the same approach as with other types of tensors and use the same 
-<code><i>Type</i>Tensor</code> interfaces. Following methods will be added to the `org.tensorflor.util.Tensors` class
+<code><i>Type</i>Tensor</code> interfaces. Following methods will be added to the `Tensors` class
 to allocate sparse tensors.
 ```java
-public static RaggedFloatTensor raggedTensorOfFloat(long[] shape);
-public static RaggedDoubleTensor raggedTensorOfDouble(long[] shape);
-public static RaggedIntTensor raggedTensorOfInt(long[] shape);
-public static RaggedLongTensor raggedTensorOfLong(long[] shape);
-public static RaggedBooleanTensor raggedTensorOfBoolean(long[] shape);
-public static RaggedByteTensor raggedTensorOfUInt8(long[] shape);
-public static RaggedStringTensor raggedTensorOfString(long[] shape);
+public static RaggedFloatTensor ofRaggedFloat(long[] shape);
+public static RaggedDoubleTensor ofRaggedDouble(long[] shape);
+public static RaggedIntTensor ofRaggedInt(long[] shape);
+public static RaggedLongTensor ofRaggedLong(long[] shape);
+public static RaggedBooleanTensor ofRaggedfBoolean(long[] shape);
+public static RaggedByteTensor ofRaggedUInt8(long[] shape);
+public static RaggedStringTensor ofRaggedString(long[] shape);
 ```
 All ragged dimensions in the tensor have a value of `-1` in the `shape` attribute. Since ragged tensors always 
 work with variable-length values, data must be first collected before the tensor buffer is allocated 
@@ -299,7 +298,7 @@ and initialized.
 
 It is also important to note that as opposed to the other type of tensors, which forbid to access an element outside the
 boundaries of the current shape, ragged dimensions will automatically grow as elements are inserted to the tensor. Let's
-take again the `Double` variant in our implementation example <b><span style="color:red">TODO</span></b>
+take again the `Double` variant in our implementation example <span style="color:red">TODO</span>
 
 ### Reading Tensor Data
 
@@ -311,16 +310,16 @@ Tensors are returned by TensorFlow operations in their symbolic format `Tensor<>
 <code><i>Type</i>Tensor</code> and access directly its data, following methods will be added to the `org.tensorflow.util.Tensors`
 class:
 ```java
-public static ReadOnlyDenseFloatTensor tensorOf(Tensor<Float> t);
-public static ReadOnlyDenseDoubleTensor tensorOf(Tensor<Double> t);
-public static ReadOnlyDenseIntTensor tensorOf(Tensor<Integer> t);
-public static ReadOnlyDenseLongTensor tensorOf(Tensor<Long> t);
-public static ReadOnlyDenseBooleanTensor tensorOf(Tensor<Boolean> t);
-public static ReadOnlyDenseByteTensor tensorOf(Tensor<UInt8> t);
-public static ReadOnlyDenseStringTensor tensorOf(Tensor<String> t);
+public static DenseFloatTensor ofFloat(Tensor<Float> t);
+public static DenseDoubleTensor ofDouble(Tensor<Double> t);
+public static DenseIntTensor ofInt(Tensor<Integer> t);
+public static DenseLongTensor ofLong(Tensor<Long> t);
+public static DenseBooleanTensor ofBoolean(Tensor<Boolean> t);
+public static DenseByteTensor ofUInt8(Tensor<UInt8> t);
+public static DenseStringTensor ofString(Tensor<String> t);
 ```
-As you may have noticed, the returned instance of a <code>Dense<i>Type</i>Tensor</code> does not permit write operations 
-to the tensor data since as result of a computation in TensorFlow, it is immutable.
+The returned instances of a <code>Dense<i>Type</i>Tensor</code> are subclasses of <code>Dense<i>Type</i>Tensor</code>
+that does not permit write operations to the tensor data since as result of a computation in TensorFlow, it is immutable.
 
 For convenience, the same methods taking a `Operand<>` as a parameter will also be available.
 
