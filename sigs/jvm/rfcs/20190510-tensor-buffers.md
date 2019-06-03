@@ -241,21 +241,23 @@ final class SparseTensor<T> implements AutoCloseable {
   public final Tensor<Double> values;
   public final Tensor<Long> denseShape;
   
-  SparseTensor(long[] shape) {
-    indices = Tensor.create(Long.class, new long[]{numDims(shape), numValues});
-    values = Tensor.create(Double.class, new long[]{numValues});
-    denseShape = Tensors.create(shape);
+  public static SparseTensor create(Class<T> type, long[] shape, long numValues) {
+    Tensor<Long> indices = Tensor.create(Long.class, new long[]{numDims(shape), numValues});
+    Tensor<T> values = Tensor.create(type, new long[]{numValues});
+    Tensor<Long> denseShape = Tensors.create(shape);
+    return new SparseTensor(indices, values, denseShape);
   }
   @Override public void close() {
     indices.close();
     values.close();
     denseShape.close();
   }
+  private SparseTensor(Tensor<Long> indices, Tensor<T> values, Tensor<Long> denseShape) { ... }
 }
 
 final class SparseDoubleTensor implements DoubleTensor, AutoCloseable {
-  SparseDoubleTensor(long[] shape) {
-    tensor = new SparseTensor(shape);
+  SparseDoubleTensor(long[] shape, long numValues) {
+    tensor = SparseTensor.create(shape, numValues);
     indicesBuffer = tensor.indices.buffer().asLongBuffer();
     valuesBuffer = tensor.values.buffer().asDoubleBuffer();
   }  
