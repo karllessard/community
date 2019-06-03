@@ -2,7 +2,7 @@
 
 | Status        | Proposed       |
 :-------------- |:---------------------------------------------------- |
-| **Author(s)** | Karl Lessard (karl@kubx.ca) |
+| **Author(s)** | Karl Lessard (karl.lessard@gmail.com) |
 | **Updated**   | 2019-05-10                                           |
 
 ## Objective
@@ -307,10 +307,12 @@ its data is copied. Again, this data copy and additional memory allocation can b
 directly when reading its data.
 
 Tensors are returned by TensorFlow operations in their symbolic format `Tensor<>`. To convert it to a 
-<code><i>Type</i>Tensor</code> and access directly its data, following methods will be added to the `org.tensorflow.util.Tensors`
+<code><i>Type</i>Tensor</code> and access directly its data, following methods will be added to the `Tensors`:
 class:
 ```java
 public static DenseFloatTensor ofFloat(Tensor<Float> t);
+public static SparseFloatTensor ofSparseFloat(Tensor<Long> indices, Tensor<Float> values, Tensor<Long> denseShape);
+
 public static DenseDoubleTensor ofDouble(Tensor<Double> t);
 public static DenseIntTensor ofInt(Tensor<Integer> t);
 public static DenseLongTensor ofLong(Tensor<Long> t);
