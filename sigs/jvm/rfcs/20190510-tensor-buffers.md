@@ -299,11 +299,7 @@ and initialized.
 
 It is also important to note that as opposed to the other type of tensors, which forbid to access an element outside the
 boundaries of the current shape, ragged dimensions will automatically grow as elements are inserted to the tensor. Let's
-take again the `Double` variant in our implementation example:
-```java
-TODO
-}
-```
+take again the `Double` variant in our implementation example <b><span style="color:red">TODO</span></b>
 
 ### Reading Tensor Data
 
@@ -326,29 +322,7 @@ public static ReadOnlyDenseStringTensor tensorOf(Tensor<String> t);
 As you may have noticed, the returned instance of a <code>Dense<i>Type</i>Tensor</code> does not permit write operations 
 to the tensor data since as result of a computation in TensorFlow, it is immutable.
 
-Additional helpers could be added to convert classes that wrap a `Tensor<>` into a <code><i>Type</i>Tensor, 
-e.g. `Output<>`, `Operand<>`, etc.
-
-### User-allocated Tensors
-
-This RFC focuses on tensors allocated by the TensorFlow runtime library. But it prepares to solution to accept other
-implementations of <code><i>Type</i>Tensor</code> that let the user allocate a tensor outside TensorFlow and 
-read/write to its data (e.g. a <code>Array<i>Type</i>Tensor</code> could be backed with a standard Java 
-array).
-
-It would be possible then to create a tensor in TensorFlow based on the data from a user-allocated tensor, similar
-to the data copy solution already present in the TF Java client. For example:
-```java
-public static Tensor<Float> create(FloatTensor data);
-public static Tensor<Double> create(DoubleTensor data);
-public static Tensor<Integer> create(IntTensor data);
-public static Tensor<Long> create(LongTensor data);
-public static Tensor<Boolean> create(BooleanTensor data);
-public static Tensor<UInt8> create(ByteTensor data);
-public static Tensor<String> create(StringTensor data);
-```
-The implementation of such tensors could (and should) be delivered by the utility library as it does not depend 
-on any TensorFlow core types.
+For convenience, the same methods taking a `Operand<>` as a parameter will also be available.
 
 ### TensorFlow Operations
 
@@ -517,5 +491,3 @@ raggedTensor.elements().forEach(e -> e.stream());  // [10.0f, 20.0f, 30.0f], [40
 
 ## Questions and Discussion Topics
 
-* Should we split the <code><i>Type</i>Tensor</code> into distinct interfaces for read-only and read-write tensors?
-* Should we plan now user-allocated tensors or can we live with TensorFlow tensors only for now?
