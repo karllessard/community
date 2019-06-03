@@ -172,7 +172,7 @@ public static DenseArrayStringTensor ofString(long[] shape);
 Each of these factories instantiate an instance of <code>Dense<i>Type</i>Tensor</code> as a implementation
 for a <code><i>Type</i>Tensor</code>. Here is what the `Double` variant may look like this:
 ```java
-final class DenseDoubleTensor implements DoubleTensor, AutoCloseable {
+final class DenseDoubleTensor implements DoubleTensor, TensorWrapper<Double>, AutoCloseable {
   DenseDoubleTensor(long[] shape) {
     tensor = Tensor.create(Double.class, shape);  // creates an empty tensor in TensorFlow
     buffer = tensor.buffer().asDoubleBuffer();
@@ -307,22 +307,14 @@ its data is copied. Again, this data copy and additional memory allocation can b
 directly when reading its data.
 
 Tensors are returned by TensorFlow operations in their symbolic format `Tensor<>`. To convert it to a 
-<code><i>Type</i>Tensor</code> and access directly its data, following methods will be added to the `Tensors`:
+<code><i>Type</i>Tensor</code> and access directly its data, following methods will be added to the `Tensors` (for
+simplicity, only the `Double` variants are listed below):
 class:
 ```java
-public static DenseFloatTensor ofFloat(Tensor<Float> t);
-public static SparseFloatTensor ofSparseFloat(Tensor<Long> indices, Tensor<Float> values, Tensor<Long> denseShape);
-
 public static DenseDoubleTensor ofDouble(Tensor<Double> t);
-public static DenseIntTensor ofInt(Tensor<Integer> t);
-public static DenseLongTensor ofLong(Tensor<Long> t);
-public static DenseBooleanTensor ofBoolean(Tensor<Boolean> t);
-public static DenseByteTensor ofUInt8(Tensor<UInt8> t);
-public static DenseStringTensor ofString(Tensor<String> t);
+public static DenseDoubleTensor ofDouble(Operand<Double> op);  // shortcut for ofDouble(op.asOutput().tensor());
+public static SparseDoubleTensor ofSparseDouble(Tensor<Long> indices, Tensor<Double> values, Tensor<Long> denseShape);
 ```
-The returned instances of a <code>Dense<i>Type</i>Tensor</code> are subclasses of <code>Dense<i>Type</i>Tensor</code>
-that does not permit write operations to the tensor data since as result of a computation in TensorFlow, it is immutable.
-
 For convenience, the same methods taking a `Operand<>` as a parameter will also be available.
 
 ### TensorFlow Operations
@@ -372,7 +364,7 @@ operator fun <T> Operand<T>.plus(tensor: Operand<T>): Operand<T> {
 ```java
 
 // Creating boolean scalar
-BooleanTensor scalar = new DenseBooleanTensor(Shape.scalar());
+BooleanTensor scalar = Tensors.ofBoolean(Shape.scalar());
 
 scalar.rank();  // 0
 scalar.size(0);  // error
@@ -382,7 +374,7 @@ scalar.totalSize();  // 1
 scalar.set(true);
 
 // Creating integer vector
-IntTensor vector = new DenseIntTensor(new long[]{4});
+IntTensor vector = Tensors.ofInt(new long[]{4});
 
 vector.rank();  // 1
 vector.size(0);  // 4
@@ -393,7 +385,7 @@ vector.set(new int[]{1, 2, 3}, 0);
 vector.set(4, 3); 
 
 // Creating float matrix
-FloatTensor matrix = new DenseFloatTensor(new long[]{2, 3});
+FloatTensor matrix = Tensors.ofFloat(new long[]{2, 3});
 
 matrix.rank();  // 2
 matrix.size(0);  // 2
@@ -408,7 +400,7 @@ secondRow.put(20.0f);
 secondRow.put(25.0f);
 
 // Create float 3d matrix
-FloatTensor matrix3d = new DenseFloatTensor(new long[]{2, 2, 3});
+FloatTensor matrix3d = Tensors.ofFloat(new long[]{2, 2, 3});
 
 matrix3d.rank();  // 3
 matrix3d.size(0);  // 2
@@ -418,15 +410,15 @@ matrix3d.totalSize();  // 12
 // {{{10.0, 10.1, 10.2}, {11.0, 11.1, 11.2}}, {{20.0, 20.1, 20.1}, {21.0, 21.1, 21.2}}}
 matrix3d.set(DoubleStream.of(10.0, 10.1, 10.2, 11.0, 11.1, 11.2, 20.0, 20.1, 20.2, 21.0, 21.1, 21.2)); 
 
-StringTensor<String> text = Tensors.createString(new long[]{-1}, data -> {
-  // Initializing data from input stream, where `values.txt` contains following modified UTF-8 strings:
-  // "in the town", "where I was", "born"
-  data.write(new FileInputStream("values.txt"));
-});
+StringTensor<String> text = Tensors.ofString(new long[]{3});
 
 text.rank();  // 1
 text.size(0);  // 3
 text.totalSize();  // 3
+
+// Initializing data from input stream, where `values.txt` contains following modified UTF-8 strings:
+// "in the town", "where I was", "born"
+text.write(new FileInputStream("values.txt"));
 
 // Reading data
 
@@ -460,7 +452,7 @@ text.slice(tf.constant(1));  // {"where I was"} (rank-0 slice)
 
 // Sparse tensors
 
-FloatTensor sparseTensor = new SparseFloatTensor(new long[]{2, 4}, 3);
+FloatTensor sparseTensor = Tensors.ofSparseFloat(new long[]{2, 4}, 3);
 
 sparseTensor.set(10.0f, 0, 0);
 sparseTensor.set(20.0f, 0, 3);
@@ -473,16 +465,14 @@ sparseTensor.stream();  // [10.0f, 0.0f, 0.0f, 20.0f, 0.0f, 30.0f, 0.0f, 0.0f]
 
 // Ragged tensors
 
-RaggedTensor<Float> raggedTensor = Tensors.createRaggedFloat(new long[]{3, -1});
+RaggedTensor<Float> raggedTensor = Tensors.ofRaggedFloat(new long[]{3, -1});
 
-, data -> {
-  data.put(10.0f, 0, 0);    
-  data.put(20.0f, 0, 1);
-  data.put(30.0f, 0, 2); 
-  data.put(40.0f, 1, 0);
-  data.put(50.0f, 2, 0);
-  data.put(60.0f, 2, 1);
-});
+raggedTensor.put(10.0f, 0, 0);    
+raggedTensor.put(20.0f, 0, 1);
+raggedTensor.put(30.0f, 0, 2); 
+raggedTensor.put(40.0f, 1, 0);
+raggedTensor.put(50.0f, 2, 0);
+raggedTensor.put(60.0f, 2, 1);
 
 raggedTensor.get(0, 1);  // 20.0f
 raggedTensor.get(1, 0);  // 40.0f
