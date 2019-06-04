@@ -72,24 +72,24 @@ interface DoubleTensor {
   // Read operations
   double get(int... indices);  // get the scalar value of a rank-0 tensor (or a slice of)
   DoubleStream stream(int... indices);  // get values of this tensor (or a slice of) as a stream
-  void get(double[] array, int... indices);  // get values of this tensor (or a slice of) into `array`
-  void get(DoubleBuffer buffer, int... indices);  // copy values of this tensor (or a slice of) into `buffer`
-  void get(DoubleTensor array, int... indices);  // copy values of this tensor (or a slice of) into `tensor`
+  void copyTo(double[] array, int... indices);  // get values of this tensor (or a slice of) into `array`
+  void copyTo(DoubleBuffer buffer, int... indices);  // copy values of this tensor (or a slice of) into `buffer`
+  void copyTo(DoubleTensor array, int... indices);  // copy values of this tensor (or a slice of) into `tensor`
   void read(OutputStream ostream);  // read elements of this tensor across all dimensions into `ostream` 
   
   // Write operations
   void set(double value, int... indices);  // set the scalar value of this rank-0 tensor (or a slice of)
-  void set(DoubleStream stream, int... indices);  // copy elements of `stream` into this tensor
-  void set(DoubleBuffer buffer, int... indices);  // copy elements of `buffer` into this tensor
-  void set(double[] array, int... indices);  // copy elements of `array` into this tensor
-  void set(DoubleTensor tensor, int... indices);  // copy elements of `tensor` into this tensor
+  void copy(DoubleStream stream, int... indices);  // copy elements of `stream` into this tensor
+  void copy(DoubleBuffer buffer, int... indices);  // copy elements of `buffer` into this tensor
+  void copy(double[] array, int... indices);  // copy elements of `array` into this tensor
+  void copy(DoubleTensor tensor, int... indices);  // copy elements of `tensor` into this tensor
   void write(InputStream istream);  // write elements of this tensor across all dimensions from `istream`
 }
 
 class DoubleIterator {
   boolean hasMoreElements();  // true if there is more elements
   double get();  // returns the current element and increment position
-  void put(double value);  // sets the current element and increment position
+  DoubleIterator put(double value);  // sets the current element and increment position, returns this
   void forEach(DoubleConsumer func);  // consume all remaining elements
   void onEach(DoubleSupplier func);  // supply all remaining elements
 }
@@ -102,7 +102,7 @@ The <code><i>Type</i>Tensor</code> interfaces support normal integer indexation,
 Ex: let `tensor` be a matrix on `(x, y)`
 ```java
 tensor.get(0, 0);  // returns scalar at x=0, y=0 (similar to array[0][0])
-tensor.put(10.0, 0, 0);  // sets scalar at x=0, y=0 (similar to array[0][0] = 10.0)
+tensor.set(10.0, 0, 0);  // sets scalar at x=0, y=0 (similar to array[0][0] = 10.0)
 tensor.stream(0);  // returns vector at x=0 as a stream
 ```
 It is also possible to create slices of a tensor, to work with a reduced view of its elements. The first variant 
@@ -172,33 +172,35 @@ public static DenseArrayStringTensor ofString(long[] shape);
 Each of these factories instantiate an instance of <code>Dense<i>Type</i>Tensor</code> as a implementation
 for a <code><i>Type</i>Tensor</code>. Here is what the `Double` variant may look like this:
 ```java
-final class DenseDoubleTensor implements DoubleTensor, TensorWrapper<Double>, AutoCloseable {
+final class DenseDoubleTensor implements DoubleTensor, Operable<Double>, AutoCloseable {
   DenseDoubleTensor(long[] shape) {
-    tensor = Tensor.create(Double.class, shape);  // creates an empty tensor in TensorFlow
+    values = Tensor.create(Double.class, shape);  // creates an empty tensor in TensorFlow
     buffer = tensor.buffer().asDoubleBuffer();
   }  
-  public Tensor<Double> toTensor() {  // tensor to be passed in TensorFlow operations
-    return tensor;
+  @Override public Tensor<Double> toTensor() {  // tensor to be passed in TensorFlow operations
+    return values;
   }
   @Override public void close() {
     tensor.close();
   }
   // implement DoubleTensor interface writing from and reading to `buffer`...
 
-  private Tensor<Double> tensor;
-  private DoubleBuffer buffer;
+  private final Tensor<Double> values;
+  private final DoubleBuffer buffer;
 }
 ```
+<i>Note: more details on the `Operable` interface are coming in the next sections.</i>
+
 It is important to note that for the `String` datatype, the shape is not enough to compute the size in bytes of the tensor
 to allocate. If each scalar element is of a variable-length, data must be first collected before allocating the tensor.
 In this case, we will use a different type of implementation that stores elements in a flat array before being copied to a real
 tensor buffer. Such implementation may look like this:
 ```java
-final class DenseArrayStringTensor implements StringTensor {
+final class DenseArrayStringTensor implements StringTensor, Operable<String> {
   DenseArrayStringTensor(long shape[]) {
-    elements = new String[numElements(shape)];
+    values = new String[numElements(shape)];
   }
-  public Tensor<String> toTensor() {  // tensor to be passed in TensorFlow operations
+  @Override public Tensor<String> toTensor() {  // tensor to be passed in TensorFlow operations
     Tensor<String> tensor = Tensor.create(String.class, shape, computeSizeInBytes());  // create empty tensor in TensorFlow
     // fill tensor with strings offsets
     for (String element : elements) {
@@ -208,7 +210,7 @@ final class DenseArrayStringTensor implements StringTensor {
   }
   // implement StringTensor interface writing from and reading to `elements`...
 
-  private String[] elements;
+  private final String[] values;
 }
 ```
 
@@ -231,45 +233,41 @@ public static SparseStringTensor ofSparseString(long[] shape, int numValues, int
 public static SparseArrayStringTensor ofSparseString(long[] shape, int numValues);
 ```
 This time, not only the shape is known in advance but also the number of values that will actually be set in the
-sparse tensor. The `SparseTensor<>` class will allocates 3 dense tensors in total: the <i>indices</i>, the <i>values</i> and 
-the <i>dense shape</i> of the tensor. This tensor handle is then wrapped by a <code>Sparse<i>Type</i>Tensor</code>. Again, 
-let's use the `Double` variant as an example:
+sparse tensor. The <code>Sparse<i>Type</i>Tensor</code> classes allocate 3 dense tensors to hold different data of a sparse
+tensor: its <i>indices</i>, its <i>values</i> and its <i>dense shape</i>. Again, let's use the `Double` variant as an example:
 ```java
-final class SparseTensor<T> implements AutoCloseable {
-  public final Tensor<Long> indices;
-  public final Tensor<Double> values;
-  public final Tensor<Long> denseShape;
-  
-  public static SparseTensor create(Class<T> type, long[] shape, long numValues) {
-    Tensor<Long> indices = Tensor.create(Long.class, new long[]{numDims(shape), numValues});
-    Tensor<T> values = Tensor.create(type, new long[]{numValues});
-    Tensor<Long> denseShape = Tensors.create(shape);
-    return new SparseTensor(indices, values, denseShape);
+final class SparseDoubleTensor implements DoubleTensor, AutoCloseable {
+  SparseDoubleTensor(long[] shape, long numValues) {
+    indices = Tensors.ofLong(new long[]{shape.length, numValues});
+    values = Tensors.ofDouble(new long[]{numValues});
+    denseShape = Tensors.ofLong(new long[]{shape.length});    
+    denseShape.copy(shape);    
+    
+    indicesBuffer = indices.buffer().asLongBuffer();
+    valuesBuffer = values.buffer().asDoubleBuffer();
+  }  
+  public Operable<Long> indices() {
+    return indices;
+  }
+  public Operable<Double> values() {
+    return values;
+  }
+  public Operable<Long> denseShape() {
+    return denseShape;
   }
   @Override public void close() {
     indices.close();
     values.close();
     denseShape.close();
   }
-  private SparseTensor(Tensor<Long> indices, Tensor<T> values, Tensor<Long> denseShape) { ... }
-}
-
-final class SparseDoubleTensor implements DoubleTensor, AutoCloseable {
-  SparseDoubleTensor(long[] shape, long numValues) {
-    tensor = SparseTensor.create(shape, numValues);
-    indicesBuffer = tensor.indices.buffer().asLongBuffer();
-    valuesBuffer = tensor.values.buffer().asDoubleBuffer();
-  }  
-  public SparseTensor<Double> toTensor() {  // structure whose fields can be passed in a TF operations
-    return tensor;
-  }
-  @Override public void close() {
-    tensor.close();
-  }
   // implement DoubleTensor interface writing from and reading to `indicesBuffer` and `valuesBuffer`...
 
-  private LongBuffer indicesBuffer;
-  private DoubleBuffer valuesBuffer;
+  private final DenseLongTensor indices;
+  private final DenseDoubleTensor values;
+  private final DenseLongTensor denseShape;
+  
+  private final LongBuffer indicesBuffer;
+  private final DoubleBuffer valuesBuffer;  
 }
 ```
 Once again, it is important to note the exception with a tensor of strings with variable-length. As with dense tensors,
@@ -315,20 +313,22 @@ public static DenseDoubleTensor ofDouble(Tensor<Double> t);
 public static DenseDoubleTensor ofDouble(Operand<Double> op);  // shortcut for ofDouble(op.asOutput().tensor());
 public static SparseDoubleTensor ofSparseDouble(Tensor<Long> indices, Tensor<Double> values, Tensor<Long> denseShape);
 ```
-For convenience, the same methods taking a `Operand<>` as a parameter will also be available.
 
 ### TensorFlow Operations
 
 Right now, the creation of [constant operands](https://github.com/tensorflow/tensorflow/blob/master/tensorflow/java/src/main/java/org/tensorflow/op/core/Constant.java) 
-in Java uses the same reflection techniques as with tensors. A simple fix is to add a new factory that takes a `Tensor<>`
-in input (which is already done internally by this class).
+in Java uses the same reflection techniques as with tensors. A simple fix is to add a new factory that takes a `Operable<T>`
+in input, from which we retrieve the tensor using `toTensor()`:
 ```java
-Constant<T> create(Tensor<T> tensor);
+Constant<T> create(Operable<T> operable);
 ```
 This factory will be mapped to the `Ops` class as any other factory, so it could be invoked like this:
 ```java
 Ops tf = Ops.create();
-tf.constant(Tensor.denseFloat(...));
+
+DenseDoubleTensor t = Tensors.ofDouble(new long[]{2, 2});
+t.copy(new double[]{0.0, 1.0, 2.0, 3.0});
+Constant<Double> c = tf.constant(t);  // takes a snapshot of this tensor as a constant operand
 ```
 Note that in this case, there is no need to close explicitly the `Tensor<>` (or with a `try-with-resource` block), 
 because eager execution environments already take care of closing discardable resources automatically.
@@ -339,19 +339,21 @@ such operation can simply use TensorFlow directly. e.g.
 ```java
 Ops tf = Ops.create();
 
-Constant<Float> matrix1 = tf.constant(Tensors.denseFloat(...));
-Constant<Float> matrix2 = tf.constant(Tensors.denseFloat(...));
+DenseFloatTensor v1 = Tensors.ofFloat(new long[]{2});
+v1.scalars().put(0.0f).put(1.0f);
+Constant<Float> c1 = tf.constant(v1);
 
-Add<Float> sum = tf.math.add(matrix1, matrix2);
+DenseFloatTensor v2 = Tensors.ofFloat(new long[]{2});
+v2.scalars().put(2.0f).put(3.0f);
+Constant<Float> c2 = tf.constant(v2);
+
+Add<Float> sum = tf.math.add(c1, c2);
+Pow<Float> pow = tf.math.pow(sum, c2);
+FloatVector result = Tensors.ofFloat(pow);  // [4.0f, 64.0f]
 ```
 Some other JVM languages offer more tools to create a rich API for calling those operations on top of the interfaces
-proposed in this document and their implementation is postponed as a future development. For example, in Kotlin,
-it could be possible to do the following:
-```kotlin
-operator fun <T> Operand<T>.plus(tensor: Operand<T>): Operand<T> {
-        return tf.math.add(this, tensor)
-    }
-```
+proposed in this document and their implementation is postponed as a future development (e.g. Scala and Kotlin
+custom operators or Kotlin infix methods).
 
 ## Detailed Design
 
@@ -359,7 +361,7 @@ operator fun <T> Operand<T>.plus(tensor: Operand<T>): Operand<T> {
 
 ![Class Diagram](images/20190510-tensor-data-nio-cd.png)
 
-### Example of usage for NdArrays
+### Example of usage
 
 ```java
 
@@ -381,7 +383,7 @@ vector.size(0);  // 4
 vector.totalSize();  // 4
 
 // Setting first elements from array and add last element directly
-vector.set(new int[]{1, 2, 3}, 0);
+vector.copy(new int[]{1, 2, 3}, 0);
 vector.set(4, 3); 
 
 // Creating float matrix
@@ -393,7 +395,7 @@ matrix.totalSize();  // 6
 
 // Initializing data using iterators
 Iterator<FloatTensor> rows = data.elements();
-rows.put(new float[]{0.0f, 5.0f, 10.0f});  // inits data at the current row (0)
+rows.copy(new float[]{0.0f, 5.0f, 10.0f});  // inits data at the current row (0)
 FloatIterator secondRow = rows.scalars();  // returns a new cursor at the current row (1)
 secondRow.put(15.0f);  // inits each scalar of the second row individually...
 secondRow.put(20.0f);
@@ -408,7 +410,7 @@ matrix3d.totalSize();  // 12
 
 // Initialize all data from a flat 3d matrix: 
 // {{{10.0, 10.1, 10.2}, {11.0, 11.1, 11.2}}, {{20.0, 20.1, 20.1}, {21.0, 21.1, 21.2}}}
-matrix3d.set(DoubleStream.of(10.0, 10.1, 10.2, 11.0, 11.1, 11.2, 20.0, 20.1, 20.2, 21.0, 21.1, 21.2)); 
+matrix3d.copy(DoubleStream.of(10.0, 10.1, 10.2, 11.0, 11.1, 11.2, 20.0, 20.1, 20.2, 21.0, 21.1, 21.2)); 
 
 StringTensor<String> text = Tensors.ofString(new long[]{3});
 
@@ -429,7 +431,7 @@ matrix3d.get(1, 1, 1);  // 21.1
 text.get(2);  // "born"
 
 IntBuffer buffer = IntBuffer.allocate(vector.numElements());
-vector.get(buffer);  // 1, 2, 3, 4
+vector.copyTo(buffer);  // 1, 2, 3, 4
 matrix.stream();  // 0.0f, 5.0f, 10.0f, 15.0f, 20.0f, 25.0f
 
 matrix3d.elements().forEach(c -> c.stream());  // [10.0, 10.1, 10.2, 11.0, 11.1, 11.2], 
@@ -467,12 +469,12 @@ sparseTensor.stream();  // [10.0f, 0.0f, 0.0f, 20.0f, 0.0f, 30.0f, 0.0f, 0.0f]
 
 RaggedTensor<Float> raggedTensor = Tensors.ofRaggedFloat(new long[]{3, -1});
 
-raggedTensor.put(10.0f, 0, 0);    
-raggedTensor.put(20.0f, 0, 1);
-raggedTensor.put(30.0f, 0, 2); 
-raggedTensor.put(40.0f, 1, 0);
-raggedTensor.put(50.0f, 2, 0);
-raggedTensor.put(60.0f, 2, 1);
+raggedTensor.set(10.0f, 0, 0);    
+raggedTensor.set(20.0f, 0, 1);
+raggedTensor.set(30.0f, 0, 2); 
+raggedTensor.set(40.0f, 1, 0);
+raggedTensor.set(50.0f, 2, 0);
+raggedTensor.set(60.0f, 2, 1);
 
 raggedTensor.get(0, 1);  // 20.0f
 raggedTensor.get(1, 0);  // 40.0f
