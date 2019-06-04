@@ -394,12 +394,10 @@ matrix.size(0);  // 2
 matrix.totalSize();  // 6
 
 // Initializing data using iterators
-Iterator<FloatTensor> rows = data.elements();
-rows.copy(new float[]{0.0f, 5.0f, 10.0f});  // inits data at the current row (0)
-FloatIterator secondRow = rows.scalars();  // returns a new cursor at the current row (1)
-secondRow.put(15.0f);  // inits each scalar of the second row individually...
-secondRow.put(20.0f);
-secondRow.put(25.0f);
+Iterator<FloatTensor> rows = matrix.elements();
+rows.next().copy(new float[]{0.0f, 5.0f, 10.0f});  // inits all scalars of the current row (0)
+FloatIterator secondRow = rows.next().scalars();  // returns a new cursor to the current row (1)
+secondRow.put(15.0f).put(20.0f).put(25.0f);  // inits each scalar of the second row individually...
 
 // Create float 3d matrix
 FloatTensor matrix3d = Tensors.ofFloat(new long[]{2, 2, 3});
