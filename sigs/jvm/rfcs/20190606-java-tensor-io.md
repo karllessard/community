@@ -45,9 +45,6 @@ TensorFlow (sparse and ragged) that is not explicitly supported right now by the
 current client that is configured to compile in Java 7, for supporting older Android devices. We need to confirm
 with Android team if it is ok now to switch to Java 8 if the TF Java remains in the main repository.*
 
-*Note: All class examples in the following sections are incomplete prototypes which purpose is only
-to clarify the proposed design by the use of code snippets.*
-
 ### NdArray API
 
 A new utility library (`org.tensorflow:tensorflow-utils`) will be distribute with the TensorFlow Java client
@@ -62,7 +59,9 @@ which tends to be less memory-consuming and provide better performances than the
 generic NdArray interface using autoboxed types if we discover that the performance hit when using them
 is negligible (e.g. if function inlining generally takes place, etc.)*
 
-For readability, only the `Double` variant is shown below:
+![NdArray Class Diagram](./images/NdArrays.jpg)
+
+For readability, only the `Double` variant is detailed below:
 ```java
 interface DoubleNdArray extends NdArray<Double> {
   long[] shape();  // return the shape of this array
@@ -165,15 +164,9 @@ how those implementations could be useful to instantiate tensors as well.
 #### Dense NdArrays
 
 A dense `NdArray`, i.e. an array with a shape of fixed dimensions into which all elements are stored, may be
-backed by a simple flat 1D array:
-```java
-final class DenseDoubleNdArray implements DoubleNdArray {
-  private long[] shape;
-  private final double[] values;
-  
-  ... // implement DoubleNdArray interface writing from and reading to `values`...
-}
-```
+backed by simple flat array(s) or buffer(s):
+
+![DenseNdArray Class Diagram](./images/DenseNdArray.jpg)
 
 #### Sparse NdArrays
 
@@ -189,18 +182,7 @@ or otherwise zero.
 This might cause a lot of lookup in the `indices` so some index caching mechanisms should also be added
 to this implementation to improve performances.
 
-Assuming that we already know the number of elements that will be set, we could implement sparse arrays
-using flat 1D arrays again.
-```java
-final class SparseDoubleNdArray implements DoubleNdArray {
-  private long[] shape;
-  private long[] indices;
-  private double[] values;
-
-  ... // implement DoubleNdArray interface writing from and reading to `indices` and `values`...
-}
-```
-If the number of elements is unknown, we could rely on collections instead of arrays.
+![SparseNdArray Class Diagram](./images/SparseNdArray.jpg)
 
 #### Ragged NdArrays
 
@@ -212,21 +194,7 @@ grow as elements are inserted to the array. It is also important to note that si
 ragged tensors have dimensions of unknown size, it is impossible to write its data without using indices (for example, 
 the `copy(...)` methods are supported but `write(...)` is not).
 
-A naive approach for implementing such array could be to build up a list of elements for each dimensions, which
-could be of a fixed or variable length:
-```java
-final class RaggedDoubleNdArray implements DoubleNdArray {
-  private static final class Element {
-    Integer fixedSize;  // non-null if size of this element is fixed (!= -1)
-    List<Element> elements;  // non-null if this element is not of the last dimension
-    Double scalar;  // non-null if this element is of the last dimension
-  }
-  private long[] shape;
-  private final List<Element> elements;
-  
-  ... // implement DoubleNdArray interface writing from and reading to `elements`...
-}
-```
+![RaggedNdArray Class Diagram](./images/RaggedNdArray.jpg)
 
 ### Tensor NdArray Implementations
 
@@ -251,30 +219,26 @@ public static DoubleTensor ofDouble(long[] shape);
 public static IntTensor ofInt(long[] shape);
 public static LongTensor ofLong(long[] shape);
 public static BooleanTensor ofBoolean(long[] shape);
-public static ByteTensor ofUInt8(long[] shape);
+public static UInt8Tensor ofUInt8(long[] shape);
 public static StringTensor ofString(long[] shape, int elementLength, byte paddingValue);
 ```
 Each of these factories instantiate an instance of <code><i>Type</i>Tensor</code> as an implementation
 for a <code><i>Type</i>NdArray</code>. These implementations are backed by a TensorFlow tensor buffer residing
 in native memory and extend from the generic `Tensor` class (which need to be modified as well). They can therefore
-be used by TensorFlow for computation. For example:
-```java
-abstract class Tensor<T> implements NdArray<T>, AutoCloseable {
-   ... // current implementation with some adjustments, with generic NdArray
-}
+be used by TensorFlow for computation. 
 
-final class DoubleTensor extends Tensor<Double> implements DoubleNdArray {  
-  private final DoubleBuffer buffer = buffer().asDoubleBuffer();
-  ... // implement DoubleNdArray, writing from and reading to `buffer`...
-}
-```
-It is important to note that for the `String` datatype, the shape is not enough to compute the size in bytes of the tensor
-to allocate. If scalar elements is of variable lengths, data must be first collected before allocating the tensor.
-In this case, we could benefit using an implementation such as `DenseStringNdArray` as shown before that will store 
+![DenseTensor Class Diagram](./images/DenseTensor.jpg)
+
+The `String` datatype is an exception in TensorFlow, since scalar elements are of variable lengths and 
+the shape is not enough to compute the size in bytes of the tensor to allocate. In this case, data must be first collected 
+before allocating the tensor. To do this, we can use a `DenseNdArray`, as described before, that will store
 elements into a fixed-size array into an array, and create the tensor by copying its data by calling `Tensors.copyOf()`:
 ```java
-public static StringTensor copyOf(StringNdArray array);
+public static StringTensor copyOf(NdArray<String> array);
 ```
+Note the implementation class `StringTensor` returned by this method, instead of a simple `Tensor<String>`. The reason is that
+string tensors in TensorFlow are formatted in a very specific way and should be handled separately from the generic logic found
+in `Tensor`.
 
 #### Sparse Tensors
 
@@ -284,49 +248,24 @@ other way in TF Java to allocate such tensor than allocating and manipulating in
 We can simplify this process by following the same approach as dense tensors, based on the 
 `NdArray` interfaces. Following methods will be added to the `Tensors` class to allocate sparse tensors.
 ```java
-public static SparseFloatTensor ofSparseFloat(long[] shape, int numValues);
-public static SparseDoubleTensor ofSparseDouble(long[] shape, int numValues);
-public static SparseIntTensor ofSparseInt(long[] shape, int numValues);
-public static SparseLongTensor ofSparseLong(long[] shape, int numValues);
-public static SparseBooleanTensor ofSparseBoolean(long[] shape, int numValues);
-public static SparseByteTensor ofSparseUInt8(long[] shape, int numValues);
-public static SparseStringTensor ofSparseString(long[] shape, int numValues, int elementLength, byte paddingValue);
+public static FloatSparseTensor ofSparseFloat(long[] shape, int numValues);
+public static DoubleSparseTensor ofSparseDouble(long[] shape, int numValues);
+public static IntSparseTensor ofSparseInt(long[] shape, int numValues);
+public static LongSparseTensor ofSparseLong(long[] shape, int numValues);
+public static BooleanSparseTensor ofSparseBoolean(long[] shape, int numValues);
+public static UInt8SparseTensor ofSparseUInt8(long[] shape, int numValues);
+public static StringSparseTensor ofSparseString(long[] shape, int numValues, int elementLength, byte paddingValue);
 ```
 This time, not only the shape is known in advance but also the number of values that will actually be set in the
-sparse tensor. The <code>Sparse<i>Type</i>Tensor</code> classes allocate three dense tensors to hold different 
-data of a sparse tensor: its <i>indices</i>, its <i>values</i> and its <i>dense shape</i>. Again, let's use 
-the `Double` variant as an example:
-```java
-abstract class SparseTensor<T> implements NdArray<T>, AutoCloseable {  
-  private final LongTensor indices;
-  protected final LongBuffer indicesBuffer;
-  private final LongTensor denseShape;
-  
-  public abstract Tensor<T> values();
-  public LongTensor indices() {
-    return indices;
-  }
-  public LongTensor denseShape() {
-    return denseShape;
-  }
-  ... // implement generic NdArray
-}
+sparse tensor. The <code><i>Type</i>SparseTensor</code> classes allocate three dense tensors to hold different 
+data of a sparse tensor: its <i>indices</i>, its <i>values</i> and its <i>dense shape</i>.
 
-final class SparseDoubleTensor extends SparseTensor<Double> implements DoubleNdArray {
-  private final DoubleTensor values;
-  private final DoubleBuffer valuesBuffer;  
+![SparseTensor Class Diagram](./images/SparseTensor.jpg)
 
-  @Override public DoubleTensor values() {
-    return values;
-  }
-  ... // implement DoubleNdArray, writing from and reading to `indicesBuffer` and `valuesBuffer`...
-}
-```
 Once again, it is important to note the exception with a tensor of strings with variable lengths. As with dense tensors,
-the data will be collected in a multidimensional sparse array first (`SparseStringNdArray`) before being copied to a 
-real tensor buffer.
+the data will be collected in a multidimensional sparse array first before being copied to a real tensor buffer.
 ```java
-public static SparseStringTensor copyOf(SparseStringNdArray array);
+public static StringSparseTensor copyOf(SparseNdArray<String> array);
 ```
 
 #### Ragged Tensors
@@ -338,18 +277,17 @@ We can simplify this process by following the same approach as with other types 
 `NdArray` interfaces. Since ragged tensors always work with variable-length values, data must be first collected 
 before the tensor buffer is allocated and initialized, so a ragged tensor is always a copy of a ragged array.
 ```java
-public static RaggedFloatTensor copyOf(RaggedFloatNdArray array);
-public static RaggedDoubleTensor copyOf(RaggedDoubleNdArray array);
-public static RaggedIntTensor copyOf(RaggedIntNdArray array);
-public static RaggedLongTensor copyOf(RaggedLongNdArray array);
-public static RaggedBooleanTensor copyOf(RaggedBooleanNdArray array);
-public static RaggedByteTensor copyOf(RaggedByteNdArray array);
-public static RaggedStringTensor copyOf(RaggedStringNdArray array);
+public static FloatRaggedTensor copyOf(FloatRaggedNdArray array);
+public static DoubleRaggedTensor copyOf(DoubleRaggedNdArray array);
+public static IntRaggedTensor copyOf(IntRaggedNdArray array);
+public static LongRaggedTensor copyOf(LongRaggedNdArray array);
+public static BooleanRaggedTensor copyOf(BooleanRaggedNdArray array);
+public static UInt8RaggedTensor copyOf(ByteRaggedNdArray array);
+public static StringRaggedTensor copyOf(RaggedNdArray<String> array);
 ```
 Once created, ragged tensor cannot expand anymore and are marked as read-only.
 
-*Note: there is no example available for an implementation of a `RaggedTensor` but it will basically replicates
-a `RaggedNdArray`, using read-only tensors to carry row splits and values. *
+![RaggedTensor Class Diagram](./images/RaggedTensor.jpg)
 
 ### TensorFlow Operations
 
@@ -451,7 +389,7 @@ matrix3d.copy(DoubleStream.of(10.0, 10.1, 10.2, 11.0, 11.1, 11.2, 20.0, 20.1, 20
 
 // Initializing data from input stream, where `values.txt` contains following modified UTF-8 strings:
 // "in the town", "where I was", "born"
-StringNdArray textData = NdArrays.ofString(new long[]{3});
+NdArray<String> textData = NdArrays.of(String.class, new long[]{3});
 textData.write(new FileInputStream("values.txt"));
 
 StringTensor text = Tensors.copyOf(textData);
@@ -491,7 +429,7 @@ text.slice(tf.constant(1));  // {"where I was"} (rank-0 slice)
 
 // Sparse tensors
 
-SparseFloatTensor sparseTensor = Tensors.ofSparseFloat(new long[]{2, 4}, 3);
+FloatSparseTensor sparseTensor = Tensors.ofSparseFloat(new long[]{2, 4}, 3);
 
 sparseTensor.set(10.0f, 0, 0);
 sparseTensor.set(20.0f, 0, 3);
@@ -504,7 +442,7 @@ sparseTensor.stream();  // [10.0f, 0.0f, 0.0f, 20.0f, 0.0f, 30.0f, 0.0f, 0.0f]
 
 // Ragged tensors
 
-RaggedFloatNdArray raggedData = NdArrays.ofRaggedFloat(new long[]{3, -1});
+FloatRaggedNdArray raggedData = NdArrays.ofRaggedFloat(new long[]{3, -1});
 
 raggedData.set(10.0f, 0, 0);    
 raggedData.set(20.0f, 0, 1);
@@ -513,7 +451,7 @@ raggedData.set(40.0f, 1, 0);
 raggedData.set(50.0f, 2, 0);
 raggedData.set(60.0f, 2, 1);
 
-RaggedFloatTensor raggedTensor = Tensors.copyOf(raggedData);
+FloatRaggedTensor raggedTensor = Tensors.copyOf(raggedData);
 
 raggedTensor.get(0, 1);  // 20.0f
 raggedTensor.get(1, 0);  // 40.0f
