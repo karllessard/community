@@ -62,6 +62,7 @@ is negligible (e.g. if function inlining generally takes place, etc.)*
 ![NdArray Class Diagram](./images/NdArrays.jpg)
 
 For readability, only the `Double` variant is detailed below:
+
 ```java
 interface DoubleNdArray extends NdArray<Double> {
   long[] shape();  // return the shape of this array
@@ -70,25 +71,25 @@ interface DoubleNdArray extends NdArray<Double> {
   long numElements();  // total number of elements in this array
   boolean isReadOnly();  // returns true if this array is read-only
   
-  DoubleNdArray slice(int... indices);  // returns a slice of this array
+  DoubleNdArray slice(long... indices);  // returns a slice of this array
   DoubleNdArray slice(NdArrayIndex... indices);  // returns a slice of this array, using various types of indices
   Iterable<DoubleNdArray> elements();  // iterates through the elements of the first axis of this array
   DoubleIterator scalars();  // iterates through the elements of a rank-1 array
 
   // Read operations
-  double get(int... indices);  // get the scalar value of a rank-0 array (or a slice of)
-  DoubleStream stream(int... indices);  // get values of this array (or a slice of) as a stream
-  void copyTo(double[] array, int... indices);  // get values of this array (or a slice of) into `array`
-  void copyTo(DoubleBuffer buffer, int... indices);  // copy values of this array (or a slice of) into `buffer`
-  void copyTo(DoubleNdArray array, int... indices);  // copy values of this array (or a slice of) into `array`
+  double get(long... indices);  // get the scalar value of a rank-0 array (or a slice of)
+  DoubleStream stream(long... indices);  // get values of this array (or a slice of) as a stream
+  void copyTo(double[] array, long... indices);  // get values of this array (or a slice of) into `array`
+  void copyTo(DoubleBuffer buffer, long... indices);  // copy values of this array (or a slice of) into `buffer`
+  void copyTo(DoubleNdArray array, long... indices);  // copy values of this array (or a slice of) into `array`
   void read(OutputStream ostream);  // read elements of this array across all dimensions into `ostream` 
   
   // Write operations
-  void set(double value, int... indices);  // set the scalar value of this rank-0 array (or a slice of)
-  void copy(DoubleStream stream, int... indices);  // copy elements of `stream` into this array
-  void copy(DoubleBuffer buffer, int... indices);  // copy elements of `buffer` into this array
-  void copy(double[] array, int... indices);  // copy elements of `array` into this array
-  void copy(DoubleNdArray array, int... indices);  // copy elements of `array` into this array
+  void set(double value, long... indices);  // set the scalar value of this rank-0 array (or a slice of)
+  void copy(DoubleStream stream, long... indices);  // copy elements of `stream` into this array
+  void copy(DoubleBuffer buffer, long... indices);  // copy elements of `buffer` into this array
+  void copy(double[] array, long... indices);  // copy elements of `array` into this array
+  void copy(DoubleNdArray array, long... indices);  // copy elements of `array` into this array
   void write(InputStream istream);  // write elements of this array across all dimensions from `istream`
 }
 
@@ -104,9 +105,9 @@ The `NdArray` interfaces support normal integer indexation, similar to standard 
 
 Ex: let `matrix` be a matrix on `(x, y)`
 ```java
-matrix.get(0, 0);  // returns scalar at x=0, y=0 (similar to array[0][0])
-matrix.set(10.0, 0, 0);  // sets scalar at x=0, y=0 (similar to array[0][0] = 10.0)
-matrix.stream(0);  // returns vector at x=0 as a stream
+matrix.get(0L, 0L);  // returns scalar at x=0, y=0 (similar to array[0][0])
+matrix.set(10.0, 0L, 0L);  // sets scalar at x=0, y=0 (similar to array[0][0] = 10.0)
+matrix.stream(0L);  // returns vector at x=0 as a stream
 ```
 It is also possible to create slices of an array, to work with a reduced view of its elements. The first variant 
 of `slice()` accept usual integer indices, to slice at a specific element in the array. The second variant 
@@ -115,31 +116,32 @@ of its axis or use values of another array as indices.
 
 Here is a non-exhaustive list of special indices that could be possibly created. Each of them are exposed as static
 methods in `NdArrayIndex`, which return an instance of the same class:
-* `at(int i)`: match element at index `i`
+* `at(long i)`: match element at index `i`
 * `all()`: matches all elements in the given dimension
-* `incl(int i...)`: matches only elements at the given indices
-* `excl(int i...)`: matches all elements but those at the given indices
-* `range(int start, int end)`: matches all elements whose indices is between `start` and `end`
+* `incl(long i...)`: matches only elements at the given indices
+* `excl(long i...)`: matches all elements but those at the given indices
+* `range(long start, long end)`: matches all elements whose indices is between `start` and `end`
 * `even()`, `odd()`: matches only elements at even/odd indices
-* `mod(int m)`: matches only elements whose indices is a multiple of `m`
+* `mod(long m)`: matches only elements whose indices is a multiple of `m`
 * `IntNdArray` and `LongNdArray` will also implement the `NdArrayIndex` interface, to allow indexation
 using rank-0 or rank-1 arrays.
 
 Ex: let `matrix` be a 3D matrix on `(x, y, z)`
 ```java
-matrix.slice(0);  // returns matrix at x=0
-matrix.slice(0, 0);  // returns vector at x=0, y=0 (on z axis)
-matrix.slice(all(), at(0), at(0));  // returns vector at y=0, z=0 (on x axis)
-matrix.slice(at(0), all(), at(0));  // returns vector at x=0, z=0 (on y axis)
+matrix.slice(0L);  // returns matrix at x=0
+matrix.slice(0L, 0L);  // returns vector at x=0, y=0 (on z axis)
+matrix.slice(all(), at(0L), at(0L));  // returns vector at y=0, z=0 (on x axis)
+matrix.slice(at(0L), all(), at(0L));  // returns vector at x=0, z=0 (on y axis)
 matrix.slice(even());  // returns all (y,z) matrices for all even values of x
 matrix.slice(scalar);  // return slice at x=scalar.get()
 matrix.slice(vector);  // return slice at x=vector.get(0), y=vector.get(1)
-matrix.slice(at(0), vector);  // return slice at x=0, y=vector.get(0), z=vector.get(1)
+matrix.slice(at(0L), vector);  // return slice at x=0, y=vector.get(0), z=vector.get(1)
 ```
 Finally, the `elements()` and `scalars()` methods simplifies sequential operation over the elements of an array,
 avoiding the user to increment manually an iterator.
 
 Ex: let `vector` be a vector or 3 elements
+
 ```java
 double d = 0.0;
 vector.scalars().onEach(() -> d++);  // vector is [0.0, 1.0, 2.0]
@@ -153,6 +155,19 @@ Finally, the `NdArray` implementations could be marked as read-only if they shou
 their data, similar to what we find in Java NIO Buffers. 
 
 More usage examples are provided at the end of this document.
+
+### Additional Notes on NdArray Size
+
+The `NdArray` API supports non-scalar arrays of any rank with up to <code>2<sup>63</sup> - 1</code> elements.
+This palliate to the current issue in TF Java where even it is possible to allocate tensors of that size, it is not
+possible to read their data since they are mapped to a single `ByteBuffer`, which is limited to
+<code>2<sup>31</sup> - 1</code> elements.
+
+Still, some of the read operations listed in the `NdArray` API will fail if the structure acceptings the data 
+does not support that number of elements as well. For example, standard Java arrays uses 32-bits indices and therefore
+cannot fit the whole data of a `NdArray` with more than `Integer.MAX_VALUE` elements. In this case, 
+calling `copyTo(array)` on such array will result in a `BufferUnderflowException`. Calling `stream()` on
+the other hand will succeed since Java streams work in 64-bits. 
 
 ### Standard NdArray Implementations
 
@@ -213,6 +228,7 @@ Currently, when creating dense tensors, temporary buffers that contains the init
 and copied to the tensor memory (see [this link](https://github.com/tensorflow/tensorflow/blob/a6003151399ba48d855681ec8e736387960ef06e/tensorflow/java/src/main/java/org/tensorflow/Tensor.java#L187) for example). 
 
 To create a densor tensor, the following methods will be added to the `Tensors` factory class:
+
 ```java
 public static FloatTensor ofFloat(long[] shape);
 public static DoubleTensor ofDouble(long[] shape);
@@ -247,14 +263,15 @@ other way in TF Java to allocate such tensor than allocating and manipulating in
 
 We can simplify this process by following the same approach as dense tensors, based on the 
 `NdArray` interfaces. Following methods will be added to the `Tensors` class to allocate sparse tensors.
+
 ```java
-public static FloatSparseTensor ofSparseFloat(long[] shape, int numValues);
-public static DoubleSparseTensor ofSparseDouble(long[] shape, int numValues);
-public static IntSparseTensor ofSparseInt(long[] shape, int numValues);
-public static LongSparseTensor ofSparseLong(long[] shape, int numValues);
-public static BooleanSparseTensor ofSparseBoolean(long[] shape, int numValues);
-public static UInt8SparseTensor ofSparseUInt8(long[] shape, int numValues);
-public static StringSparseTensor ofSparseString(long[] shape, int numValues, int elementLength, byte paddingValue);
+public static FloatSparseTensor ofSparseFloat(long[] shape, long numValues);
+public static DoubleSparseTensor ofSparseDouble(long[] shape, long numValues);
+public static IntSparseTensor ofSparseInt(long[] shape, long numValues);
+public static LongSparseTensor ofSparseLong(long[] shape, long numValues);
+public static BooleanSparseTensor ofSparseBoolean(long[] shape, long numValues);
+public static UInt8SparseTensor ofSparseUInt8(long[] shape, long numValues);
+public static StringSparseTensor ofSparseString(long[] shape, long numValues, long elementLength, byte paddingValue);
 ```
 This time, not only the shape is known in advance but also the number of values that will actually be set in the
 sparse tensor. The <code><i>Type</i>SparseTensor</code> classes allocate three dense tensors to hold different 
@@ -276,6 +293,7 @@ distinct tensors to hold, let say, the row splits and the values for all dimensi
 We can simplify this process by following the same approach as with other types of tensors, based on the 
 `NdArray` interfaces. Since ragged tensors always work with variable-length values, data must be first collected 
 before the tensor buffer is allocated and initialized, so a ragged tensor is always a copy of a ragged array.
+
 ```java
 public static FloatRaggedTensor copyOf(FloatRaggedNdArray array);
 public static DoubleRaggedTensor copyOf(DoubleRaggedNdArray array);
@@ -353,18 +371,18 @@ scalar.numElements();  // 1
 scalar.set(true);
 
 // Creating integer vector
-IntTensor vector = Tensors.ofInt(new long[]{4});
+IntTensor vector = Tensors.ofInt(new long[]{4L});
 
 vector.numDimensions();  // 1
 vector.numElements(0);  // 4
 vector.numElements();  // 4
 
 // Setting first elements from array and add last element directly
-vector.copy(new int[]{1, 2, 3}, 0);
-vector.set(4, 3); 
+vector.copy(new int[]{1, 2, 3}, 0L);
+vector.set(4, 3L); 
 
 // Creating float matrix
-FloatTensor matrix = Tensors.ofFloat(new long[]{2, 3});
+FloatTensor matrix = Tensors.ofFloat(new long[]{2L, 3L});
 
 matrix.numDimensions();  // 2
 matrix.numElements(0);  // 2
@@ -377,7 +395,7 @@ FloatIterator secondRow = rows.next().scalars();  // returns a new cursor to the
 secondRow.put(15.0f).put(20.0f).put(25.0f);  // inits each scalar of the second row individually...
 
 // Create float 3d matrix
-FloatTensor matrix3d = Tensors.ofFloat(new long[]{2, 2, 3});
+FloatTensor matrix3d = Tensors.ofFloat(new long[]{2L, 2L, 3L});
 
 matrix3d.numDimensions();  // 3
 matrix3d.numElements(0);  // 2
@@ -389,7 +407,7 @@ matrix3d.copy(DoubleStream.of(10.0, 10.1, 10.2, 11.0, 11.1, 11.2, 20.0, 20.1, 20
 
 // Initializing data from input stream, where `values.txt` contains following modified UTF-8 strings:
 // "in the town", "where I was", "born"
-NdArray<String> textData = NdArrays.of(String.class, new long[]{3});
+NdArray<String> textData = NdArrays.of(String.class, new long[]{3L});
 textData.write(new FileInputStream("values.txt"));
 
 StringTensor text = Tensors.copyOf(textData);
@@ -401,10 +419,10 @@ text.numElements();  // 3
 // Reading data
 
 scalar.get();  // true
-vector.get(0);  // 1
-matrix.get(0, 1);  // 5.0f
-matrix3d.get(1, 1, 1);  // 21.1
-text.get(2);  // "born"
+vector.get(0L);  // 1
+matrix.get(0L, 1L);  // 5.0f
+matrix3d.get(1L, 1L, 1L);  // 21.1
+text.get(2L);  // "born"
 
 IntBuffer buffer = IntBuffer.allocate(vector.numElements());
 vector.copyTo(buffer);  // 1, 2, 3, 4
@@ -415,41 +433,41 @@ text.scalars().forEach(System.out::println);  // "in the town", "where I was", "
 
 // Working with slices
 
-scalar.slice(0);  // error
-vector.slice(0);  // {1} (rank-0)
-matrix.slice(1, 1);  // {20.0f} (rank-0)
+scalar.slice(0L);  // error
+vector.slice(0L);  // {1} (rank-0)
+matrix.slice(1L, 1L);  // {20.0f} (rank-0)
 
-matrix3d.slice(0, 0);  // {10.0, 10.1} (rank-1)
-matrix3d.slice(all(), at(0));  // {{10.0, 10.1, 10.2}, {20.0, 20.1, 20.2}} (rank-2)
-matrix3d.slice(all(), at(0), at(0));  // {10.0, 20.0} (rank-1)
-matrix3d.slice(all(), at(0), incl(0, 2));  // {{10.0, 10.2}, {20.0, 20.2}} (rank-2)
-matrix3d.slice(all(), all(), excl(1));  // {{{10.0, 10.2}, {11.0, 11.2}}, {{20.0, 20.2}, {21.0, 21.2}}} (rank-3)
+matrix3d.slice(0L, 0L);  // {10.0, 10.1} (rank-1)
+matrix3d.slice(all(), at(0L));  // {{10.0, 10.1, 10.2}, {20.0, 20.1, 20.2}} (rank-2)
+matrix3d.slice(all(), at(0L), at(0L));  // {10.0, 20.0} (rank-1)
+matrix3d.slice(all(), at(0L), incl(0L, 2L));  // {{10.0, 10.2}, {20.0, 20.2}} (rank-2)
+matrix3d.slice(all(), all(), excl(1L));  // {{{10.0, 10.2}, {11.0, 11.2}}, {{20.0, 20.2}, {21.0, 21.2}}} (rank-3)
 
 text.slice(tf.constant(1));  // {"where I was"} (rank-0 slice)
 
 // Sparse tensors
 
-FloatSparseTensor sparseTensor = Tensors.ofSparseFloat(new long[]{2, 4}, 3);
+FloatSparseTensor sparseTensor = Tensors.ofSparseFloat(new long[]{2L, 4L}, 3L);
 
-sparseTensor.set(10.0f, 0, 0);
-sparseTensor.set(20.0f, 0, 3);
-sparseTensor.set(30.0f, 1, 1);
-sparseTensor.set(40.0f, 2, 1);  // fails, index oob
+sparseTensor.set(10.0f, 0L, 0L);
+sparseTensor.set(20.0f, 0L, 3L);
+sparseTensor.set(30.0f, 1L, 1L);
+sparseTensor.set(40.0f, 2L, 1L);  // fails, index oob
 
-sparseTensor.get(0, 0);  // 10.0f
-sparseTensor.get(0, 1);  // 0.0f
+sparseTensor.get(0L, 0L);  // 10.0f
+sparseTensor.get(0L, 1L);  // 0.0f
 sparseTensor.stream();  // [10.0f, 0.0f, 0.0f, 20.0f, 0.0f, 30.0f, 0.0f, 0.0f]
 
 // Ragged tensors
 
-FloatRaggedNdArray raggedData = NdArrays.ofRaggedFloat(new long[]{3, -1});
+FloatRaggedNdArray raggedData = NdArrays.ofRaggedFloat(new long[]{3L, -1L});
 
-raggedData.set(10.0f, 0, 0);    
-raggedData.set(20.0f, 0, 1);
-raggedData.set(30.0f, 0, 2); 
-raggedData.set(40.0f, 1, 0);
-raggedData.set(50.0f, 2, 0);
-raggedData.set(60.0f, 2, 1);
+raggedData.set(10.0f, 0L, 0L);    
+raggedData.set(20.0f, 0L, 1L);
+raggedData.set(30.0f, 0L, 2L); 
+raggedData.set(40.0f, 1L, 0L);
+raggedData.set(50.0f, 2L, 0L);
+raggedData.set(60.0f, 2L, 1L);
 
 FloatRaggedTensor raggedTensor = Tensors.copyOf(raggedData);
 
