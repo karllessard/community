@@ -96,7 +96,6 @@ interface DoubleNdArray extends NdArray<Double> {
 }
 
 class DoubleIterator extends ScalarIterator<Double> {
-  boolean hasMoreElements();  // true if there is more elements
   double get();  // returns the current element and increment position
   DoubleIterator put(double value);  // sets the current element and increment position, returns this
   void forEach(DoubleConsumer func);  // consume all remaining elements
