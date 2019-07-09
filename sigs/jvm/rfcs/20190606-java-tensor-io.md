@@ -64,16 +64,18 @@ is negligible (e.g. if function inlining generally takes place, etc.)*
 For readability, only the `Double` variant is detailed below:
 
 ```java
-interface DoubleNdArray extends NdArray<Double> {
+interface NdArray<T> extends Iterable<NdArray<T>> {
   long[] shape();  // return the shape of this array
   int numDimensions();  // number of dimensions (or rank) of this array
   long numElements(int dim);  // number of elements in a dimension of this array
   long numElements();  // total number of elements in this array
   boolean isReadOnly();  // returns true if this array is read-only
-  
+}
+
+interface DoubleNdArray extends NdArray<Double> {
   DoubleNdArray slice(long... indices);  // returns a slice of this array
   DoubleNdArray slice(NdArrayIndex... indices);  // returns a slice of this array, using various types of indices
-  Iterable<DoubleNdArray> elements();  // iterates through the elements of the first axis of this array
+  Iterable<DoubleNdArray> typedIterator();  // iterates through the elements of the first axis of this array
   DoubleIterator scalars();  // iterates through the elements of a rank-1 array
 
   // Read operations
@@ -93,7 +95,7 @@ interface DoubleNdArray extends NdArray<Double> {
   void write(InputStream istream);  // write elements of this array across all dimensions from `istream`
 }
 
-class DoubleNdArrayIterator extends NdArrayIterator<Double> {
+class DoubleIterator extends NdArrayIterator<Double> {
   boolean hasMoreElements();  // true if there is more elements
   double get();  // returns the current element and increment position
   DoubleIterator put(double value);  // sets the current element and increment position, returns this
