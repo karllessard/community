@@ -38,20 +38,21 @@ This is the main repository for hosting TF Java code. It will consist of multipl
 
 Right now, the list of modules that will take place in this repository is:
 
-* /core
-  * The Java client, including the Java code, its native layer and different generators used to create Java classes dynamically
-    at compile time, including TF operations wrappers.
-  * Each of these components will be also released as seperate modules
+#### core
+
+All artifacts composing the actual Java client, including the Java code, its native layer and different generators used to create Java classes dynamically at compile time, including TF operations wrappers. Each of these components will be also released as seperate modules
   
-* /nio
-  * Java self-contained library that provides advanced support for large buffers I/O operations 
-    (exceeding 2<sup>32</sup> - 1 bytes) and for n-dimensional data structures
-  * At some point, the Java client core will be also based on this library to improve I/O performances and usage.
-  * The `nio` name comes from the similarities between this library and the [`java.nio`](https://docs.oracle.com/javase/8/docs/api/java/nio/package-summary.html) package found in the JDK, that is unfortunately
-    lacking the support of 64-bits indexation.
+#### nio
+
+A self-contained Java library that provides advanced support for large buffers I/O operations (exceeding 2<sup>32</sup> - 1 bytes) and for n-dimensional data structures
+
+At some point, the Java client core will be also based on this library to improve I/O performances and usage. The `nio` 
+name comes from the similarities between this library and the [`java.nio`](https://docs.oracle.com/javase/8/docs/api/java/nio/package-summary.html) 
+package found in the JDK, that is unfortunately lacking the support of 64-bits indexation.
   
-* /keras
-  * A adaptation of the Keras library to Java, that will serve as the main API for training on TF Java.
+#### keras
+
+An adaptation of the Keras library to Java, that will serve as the main API for training on TF Java.
   
 ### /tensorflow/java-models
 
@@ -64,6 +65,9 @@ The java-models will provide OOTB utilities for Java developers to jump start us
 For example they can use any of the object-detection models in https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/detection_model_zoo.md by 
 just passing in the URI.
 
-Also we will try to provide a proper abstraction API (e.g. GraphRunner)  that hides the raw tensors and so can be used by non-machine learning experts.
-In the future those libraries will allow using the models in a transfer learning setting with TensorFlow Java as well. 
 We will try to add models that complement the existing set of models and can be used as building blocks in other apps.
+
+#### framework
+
+A proper abstraction API (e.g. GraphRunner) that hides the raw tensors and so can be used by non-machine learning experts.
+In the future those libraries will allow using the models in a transfer learning setting with TensorFlow Java as well. 
