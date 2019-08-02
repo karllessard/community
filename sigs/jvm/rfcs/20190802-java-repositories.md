@@ -12,7 +12,7 @@ actual Java client found in TensorFlow core repository.
 ## Motivation
 
 In the spirit of TensorFlow modularization, one main goal of SIG JVM is to migrate [TensorFlow Java client](https://github.com/tensorflow/tensorflow/tree/master/tensorflow/java)
-to its own repository so it can evolve and be released independently from TensorFlow core libraries (internally, we call this migration the *Jexit*).
+to its own repository so it can evolve and be released independently from TensorFlow core libraries (internally, the SIG calls this migration the *Jexit*, which is self-explanatory).
 
 Additionally, some repositories are also requested to distribute high-level abstractions of TensorFlow in Java that will also evolve independently
 from the client and have their own release cycles.
@@ -39,16 +39,19 @@ This is the main repository for hosting TF Java code. It will consist of multipl
 Right now, the list of modules that will take place in this repository is:
 
 * /core
-  * The Java client, including the Java code and its native layer
-  * Each of those components will be also released as two seperate modules
+  * The Java client, including the Java code, its native layer and different generators used to create Java classes dynamically
+    at compile time, including TF operations wrappers.
+  * Each of these components will be also released as seperate modules
   
 * /nio
-  * Java self-contained library that provides advanced support for large buffers I/O operations (exceeding 2<sup>32</sup> - 1 bytes) and
-    for n-dimensional data structures
-  * At some point, the Java client core will be based on this library as well
+  * Java self-contained library that provides advanced support for large buffers I/O operations 
+    (exceeding 2<sup>32</sup> - 1 bytes) and for n-dimensional data structures
+  * At some point, the Java client core will be also based on this library to improve I/O performances and usage.
+  * The `nio` name comes from the similarities between this library and the [`java.nio`](https://docs.oracle.com/javase/8/docs/api/java/nio/package-summary.html) package found in the JDK, that is unfortunately
+    lacking the support of 64-bits indexation.
   
 * /keras
-  * A adaptation of the Keras API to Java
+  * A adaptation of the Keras library to Java, that will serve as the main API for training on TF Java.
   
 ### /tensorflow/java-models
 
