@@ -50,13 +50,21 @@ At some point, the Java client core will be also based on this library to improv
 name comes from the similarities between this library and the [`java.nio`](https://docs.oracle.com/javase/8/docs/api/java/nio/package-summary.html) 
 package found in the JDK, that is unfortunately lacking the support of 64-bits indexation.
   
+#### model-framework
+
+A proper abstraction API (e.g. GraphRunner) that hides the raw tensors and so can be used by non-machine learning experts.
+In the future those libraries will allow using the models in a transfer learning setting with TensorFlow Java as well.
+
+More details in the next section.
+
 #### keras
 
 An adaptation of the Keras library to Java, that will serve as the main API for training on TF Java.
   
 ### /tensorflow/java-models
 
-The java-models will contain Java inference libraries for various pre-trained TensorFlow models. 
+The java-models will contain Java inference libraries for various pre-trained TensorFlow models, based on the Java 
+TF model framework. 
 
 This repository hosts a set of Java libraries for loading and inferring various pre-trained TensorFlow models. 
 It provides a quick reference integrating for some of the popular TensorFlow models such as object detection, pose estimation, face detection and alike.
@@ -66,8 +74,3 @@ For example they can use any of the object-detection models in https://github.co
 just passing in the URI.
 
 We will try to add models that complement the existing set of models and can be used as building blocks in other apps.
-
-#### framework
-
-A proper abstraction API (e.g. GraphRunner) that hides the raw tensors and so can be used by non-machine learning experts.
-In the future those libraries will allow using the models in a transfer learning setting with TensorFlow Java as well. 
