@@ -6,14 +6,14 @@
 
 ## Objective
 
-Expose differently tensors from the TensorFlow Java client to support more data types while allowing the user
+Modify how tensors are exposed by the TensorFlow Java client to support more data types while allowing the user
 to manipulate their content directly from Java space.
 
 ## Motivation
 
-In order to implement [previous RFC](https://github.com/karllessard/community/blob/master/sigs/jvm/rfcs/20190606-java-tensor-io.md)
-about I/O operations on tensors from Java space, some changes must be made the the actual Tensor API found in 
-the TensorFlow Java core client.
+In order to implement the [previous RFC](https://github.com/karllessard/community/blob/master/sigs/jvm/rfcs/20190606-java-tensor-io.md)
+about I/O operations on tensors from Java space, some changes must be made to the tensor API found in 
+the actual TensorFlow Java core client.
 
 But there are other reasons as well to justify a full redesign of that API. By allowing the first 2.x TF Java
 release to break backward compatibility with previous versions, we could take that opportunity to fix most of
@@ -29,26 +29,26 @@ directly from the Java space and enforcing compile-time type safety.
 ### Background
 
 As planned in the [Java Tensor NIO RFC](https://github.com/karllessard/community/blob/master/sigs/jvm/rfcs/20190606-java-tensor-io.md), 
- to allow user to read or write tensor data from the Java space, the `Tensor` class must implement the 
+ to allow a user to read or write tensor data directly from the Java space, the `Tensor` class must implement the 
 new `NdArray` interface. This interface carries as a generic parameter the Java type used to access this data. 
-For example, a `NdArray<Integer>` can read or write Java `Integer`s in a n-dimensional data structure.
+For example, a `NdArray<Integer>` can read or write Java integers in a n-dimensional data structure.
 
-Actually the `Tensor` class also have a generic parameter, that looks similar to the one used by the `NdArray` but 
-for a completely different purpose. This parameter is only present to check compile-time type compatibility between 
-operands of an operation. For example, a `Tensor<Integer>` can be added to another `Tensor<Integer>` (via `tf.constant` 
-and `tf.math.add`) but not to a `Tensor<Float>`.
+On the other hand, the `Tensor` class actually also has a generic type parameter, which might look similar to the 
+one required by the `NdArray` but has a completely different purpose. This parameter is only present to check 
+compile-time type compatibility between operands of an operation. For example, a `Tensor<Integer>` can be added to 
+another `Tensor<Integer>` (via `tf.constant` and `tf.math.add`) but not to a `Tensor<Float>`.
 
 We can naively think that the Tensor type parameter can be used to serve both purposes (i.e. compile-time type safety
-and direct data access) but it is not possible because there is no guarantee that its value matches a type that can be used
-to store data in memory. In fact, the `Integer` value in the previous example is completely unrelated with what 
+and direct data access) but it is not possible because there is no guarantee its value matches a tensor type that can 
+be used to access data in memory. In fact, the `Integer` value in the previous example is completely unrelated with what 
 an integer is in Java, it is simply used as an idiomatic alias to `INT32` TF data type. For this reason, you can
-have custom type classes, such as `Tensor<UInt8>`, that insure type safety but you cannot read a `UInt8`
-value from memory, you actually read a `Byte`. 
+have custom type classes, such as `Tensor<UInt8>`, that insure type safety between `UInt8` operands, but you cannot 
+read a `UInt8` value from memory, you actually read a `Byte`. 
 
 Since the parameter of the `NdArray` must be the Java type of the data stored in memory, since `Tensor` needs
 to implement the `NdArray` interface to allow direct I/O operations, and since we carry the TF data type as a
-parameter to `Tensor` for type checking, then we would end up needing two generic types in the `Tensor`
-signature, like `Tensor<UInt8, Byte>` or `Tensor<Integer, Integer>`. 
+parameter to `Tensor` for type safety, we would end up needing two generic types in the `Tensor`
+signature, e.g. `Tensor<UInt8, Byte>` or `Tensor<Integer, Integer>`. 
 
 This can start to be annoying pretty fast. The current proposal main purpose is to avoid the hassle of carrying
 to much information in generic parameters by taking a completely different approach.
@@ -99,11 +99,11 @@ of a graph session.
 #### Data Types
 
 Now even with those new concrete classes, we need to be able to carry information about a given data type without
-the need of instantiating a tensor. Actually this information is carried by the [`DataType` enum class](https://github.com/karllessard/tensorflow/blob/master/tensorflow/java/src/main/java/org/tensorflow/DataType.java),
+accessing a tensor instance. Actually, this information is carried by the [`DataType` enum class](https://github.com/karllessard/tensorflow/blob/master/tensorflow/java/src/main/java/org/tensorflow/DataType.java),
 which converts back and forth a type alias (such as `Integer`) to a TF data type (such as `INT32`).
 
 Again, this conversion can be sometimes painful and could be avoid by changing the `DataType` enum class to a 
-normal one, that is instantiated in each tensor class. For example:
+normal static object in each tensor class. For example:
 
 ```java
 public abstract class DataType<U> {
@@ -123,6 +123,10 @@ This way, you can pass a data type as an attribute to an operation by accessing 
 of the tensor class that represents this type, with no enum conversion needed. For example, 
 `Placeholder<TInt32> p = tf.placeholder(TInt32.DTYPE)`.
 
+Sometimes, we still need a supported `DataType` from an ordinal value returned by TensorFlow C++ core. 
+In this case, we have no choice but to have a revert lookup method, something like `DataTypes.valueOf(int ordinal)`. 
+Fortunately, this is more a requirement internal to the TF Java core client and shouldn't be needed by the users.
+
 ### Tensor Allocation
 
 There is actually a plenitude of methods to allocate a tensor in Java.
@@ -134,7 +138,7 @@ flexible, those factories make use of heavy reflection techniques that offer poo
 [Other factories](https://github.com/karllessard/tensorflow/blob/44ebaf12e7f196ef621413ce90c48bb9ae5f7522/tensorflow/java/src/main/java/org/tensorflow/Tensor.java#L167)
 accept a `java.nio.Buffer` for data input, which proved to be way more efficient but is not
 easy to use, especially when dealing with high rank tensors. Those factories were already planned to be replaced
-by an equivalent that accept a `NdArray` instead.
+by an equivalent that accept an `NdArray` instead.
 
 Then there is a multitude of factories found in the [`Tensors` helper class](https://github.com/karllessard/tensorflow/blob/master/tensorflow/java/src/main/java/org/tensorflow/Tensors.java),
 which make all use of the non-efficient reflective allocators discussed before, so they must be avoided in their
@@ -145,14 +149,14 @@ offers also a convenient way to quickly allocate a single-use tensor for creatin
 the same non-efficient reflective allocators.
 
 For a better experience, it should be more intuitive for a user to know which factory to use and when. Basically, there
-is two main cases to cover: allocating a tensor for creating a constant and allocating a tensor for feeding data
-to the network.
+is two main cases to cover: allocating a tensor for feeding data to the network and allocating a tensor for 
+creating a constant.
 
 #### Data Tensors
 
 Data tensors, such as those feeding a network, must be allocated explicitely by the user by providing a data type
 and the data in input. Having the factory methods directly in the tensor type classes avoid the former parameter
-while the data in input could be written using basic `NdArray` functionality. For example:
+while the data in input could be initialize using basic `NdArray` functionalities. For example:
 ```java
 public class TInt32 extends Tensor<Integer> implements Numeric {
 
@@ -163,13 +167,13 @@ public class TInt32 extends Tensor<Integer> implements Numeric {
     }
 }
 
-TInt32 matrix = TInt32.ofShape(2, 2).row(10, 12).row(32, 42).done();  // equivalent to new int[][]{{10, 12}, {32, 42}}
+TInt32 matrix = TInt32.ofShape(2, 2).row(10, 12).row(32, 42).done();
 ```
-*Note: the `row` builder pattern found in the previous example does not exist yet in the actual NIO RFC and
-is an addendum to this RFC at the end of this document*
+*Note: the `row` method in the previous example does not exist yet in the actual NIO RFC and is an addendum to this 
+RFC that can be consulted at the end of this document*
 
 Also, for convenience, nothing prevent us to have more factory methods in those classes, to allocate tensors
-of a known shape or to copy existing N-dimensional data into a new tensor.
+of known shapes or to copy existing N-dimensional data into a new tensor.
 ```java
 public class TInt32 extends Tensor<Integer> implements Numeric {
 
@@ -198,14 +202,16 @@ TInt32 copyOfMatrix = TInt32.copyOf(matrix);  // given 'matrix' from the previou
 #### Constant Tensors
 
 For constant allocation, the actual form of accepting a Java constant in parameter to the `tf.constant()` method is 
-very intuitive and concise. For example, `tf.constant(0)`, where `tf` is an instance of `Ops`.
+very intuitive and concise (e.g. `tf.constant(0)`, where `tf` is an instance of `Ops`).
 We should not introduce more complexity unless needed. Plus, it can be generally safe
-to assume that when dealing with constants, we can continue to map implicitely a given Java type to a TF data type
-(e.g. a `int` value generates a `TInt32` constant, a `float` value generates a `TFloat` constant, etc.)
+to assume that when dealing with constants, we can map implicitely a given Java type to a TF data type
+(e.g. a `int` value generates a `TInt32` constant, a `float` value generates a `TFloat` constant, etc.), while allowing
+the user to force a different data type if needed.
 
 The underlying implementation though must be changed to avoid using reflective techniques to generate the tensor and
 must be more explicit. To simplify this task, we should limit the possible "short-cut" factories to rank-0 or rank-1
-constants (which satisfies most of the cases) and rely on explicit `Tensor` for constant of a higher rank. For example:
+constants (which satisfies most of the cases) and passing explicitly a `Tensor` instance for constant of a higher rank. 
+For example:
 
 ```java
 public final class Constant<U> extends PrimitiveOp {
@@ -231,7 +237,61 @@ Constant<TInt32> matrix = tf.constant(TInt32.ofShape(2, 2).row(10, 11).row(30, 4
 
 ```
 
+## Addendum
 
-## Detailed Design
+### NdArray Iterative Data Initialization
+
+In some previous examples, some tensors are initialize using a new method called `row`. This method is intented
+to be added to the original [`NdArray` API](https://github.com/karllessard/community/blob/master/sigs/jvm/rfcs/20190606-java-tensor-io.md#ndarray-api)
+submitted in the previous RFC, with the objective of allowing the allocation and initialization
+of a small tensor in a single line that mimics what standard multidimensional Java arrays.
+
+The idea is to initialize data of each row of the `NdArray` individually as a sequence by calling `row(...)`, 
+and then invoke the `done()` method to return the newly allocated `NdArray` instance. A "row" in this terminology
+means all vectors on the last axis (dimension) of an array.
+
+Let's compare standard Java arrays with those new methods as they are used by tensors:
+```java
+
+// Create a 2D matrix
+int[][] matrix2d_s = new int[][] { {1, 2}, {3, 4} };
+TInt32 matrix2d_t = TInt32.ofShape(2, 2).row(1, 2).row(3, 4).done();
+
+// Create a 3D matrix
+int[][][] matrix3d_s = new int[][][] { { {1, 2}, {3, 4} }, { {5, 6}, {7, 8} }, { {9, 10}, {11, 12} } };
+TInt32 matrix3d_t = TInt32.ofShape(3, 2, 2)
+  .row(1, 2).row(3, 4)
+  .row(5, 6).row(7, 8)
+  .row(9, 10).row(11, 12)
+  .done();
+```
+Of course, the standard Java arrays gives a better view on where is located a given row, by embedding it
+through a series of brackets. The actual proposal is focusing on simplicity and performance more that readability
+but please, feel free to suggest any better solution.
+
+Note also that an advantage of using `NdArray` is that the type and the shape of the tensor is explicit and can be easily 
+retrieved by calling `t.dataType()` and `t.shape()` respectively, while with standard Java arrays those need
+to be inferred and discovered from the TF Java client using costly reflections and navigating through the array.
+
+### Custom Tensor Types
+
+It has been reported that in some cases, supporting compile-time type safety can become a nightmare when 
+testing a network using different datatypes. Actually, this can require a lot of search & replace on each 
+experiment (e.g. `FLOAT` vs `DOUBLE`). 
+
+The actual proposal could be extended to support registration of custom tensor types, so that a user can define
+its own and change its internal representation only. For example:
+```java
+public final class TCustom implements Tensor<Double> {
+
+    public static final class DataType<TCustom> DTYPE = 
+        DataType.create(TCustom.class, TDouble.DTYPE.ordinal(), TDouble.DTYPE.byteSize());
+}
+```
+*TODO! There is a lot of details missing to actually support correctly this feature. If there is an interest for
+it, we can go further in our analysis and update this section accordingly *
 
 ## Questions and Discussion Topics
+
+* Is it OK to break backward compatibility for our first release that will come out of the our new repositories,
+  i.e. version `2.0.0`? 
