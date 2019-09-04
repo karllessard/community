@@ -29,7 +29,7 @@ directly from the Java space and enforcing compile-time type safety.
 ### Background
 
 As planned in the [Java Tensor NIO RFC](https://github.com/karllessard/community/blob/master/sigs/jvm/rfcs/20190606-java-tensor-io.md), 
-in order to allow user to read or write tensor data from the Java space, the `Tensor` class must implement the 
+ to allow user to read or write tensor data from the Java space, the `Tensor` class must implement the 
 new `NdArray` interface. This interface carries as a generic parameter the Java type used to access this data. 
 For example, a `NdArray<Integer>` can read or write Java `Integer`s in a n-dimensional data structure.
 
