@@ -150,7 +150,21 @@ to the network.
 
 #### Data Tensors
 
-Data tensors, such as those feeding a network, must be allocated explicitely by the user by 
+Data tensors, such as those feeding a network, must be allocated explicitely by the user by providing a data type
+and the data in input. Having the factory methods directly in the tensor type classes avoid the former parameter
+while the data in input could be written using basic `NdArray` functionality. For example:
+```java
+public class TInt32 extends Tensor<Integer> implements Numeric {
+
+    public static final DataType<TInt32> DTYPE = DataType.create(TInt32.class, 3, 4);
+ 
+    public static TInt32 ofShape(long... dimensionSizes) {
+        return allocate(DTYPE, Shape.make(dimensionSizes);
+    }
+}
+
+TInt32 matrix = TInt32.ofShape(2, 2).row(10, 12).row(32, 42).done();
+```
 
 #### Constant Tensors
 
@@ -179,8 +193,6 @@ public final class Constant<U> extends PrimitiveOp {
         ...
     }
 }
-
-// Usage with the Ops API
 
 Constant<TInt32> scalar = tf.constant(10);  // single argument constructor is chosen
 
