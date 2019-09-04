@@ -163,7 +163,36 @@ public class TInt32 extends Tensor<Integer> implements Numeric {
     }
 }
 
-TInt32 matrix = TInt32.ofShape(2, 2).row(10, 12).row(32, 42).done();
+TInt32 matrix = TInt32.ofShape(2, 2).row(10, 12).row(32, 42).done();  // equivalent to new int[][]{{10, 12}, {32, 42}}
+```
+*Note: the `row` builder pattern found in the previous example does not exist yet in the actual NIO RFC and
+is an addendum to this RFC at the end of this document*
+
+Also, for convenience, nothing prevent us to have more factory methods in those classes, to allocate tensors
+of a known shape or to copy existing N-dimensional data into a new tensor.
+```java
+public class TInt32 extends Tensor<Integer> implements Numeric {
+
+   ...
+   
+   public static TInt32 scalar(Integer value) {
+       return allocate(DTYPE, Shape.make()).set(value);
+   }
+   
+   public static TInt32 vector(Integer... values) {
+       return allocate(DTYPE, Shape.make(values.length)).row(values).done();
+   }
+   
+   public static TInt32 copyOf(NdArray<Integer> data) {
+       return allocate(DTYPE, data.shape()).copyFrom(data);
+   }
+}
+
+TInt32 scalar = TInt32.scalar(10);
+
+TInt32 vector = TInt32.vector(10, 20, 30);
+
+TInt32 copyOfMatrix = TInt32.copyOf(matrix);  // given 'matrix' from the previous example
 ```
 
 #### Constant Tensors
@@ -201,8 +230,6 @@ Constant<TInt32> vector = tf.constant(10, 11, 42);  // variadic constructor is c
 Constant<TInt32> matrix = tf.constant(TInt32.ofShape(2, 2).row(10, 11).row(30, 40).done());
 
 ```
-
-
 
 
 ## Detailed Design
