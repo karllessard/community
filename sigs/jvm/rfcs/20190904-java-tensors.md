@@ -39,15 +39,15 @@ compile-time type compatibility between operands of an operation. For example, a
 another `Tensor<Integer>` (via `tf.constant` and `tf.math.add`) but not to a `Tensor<Float>`.
 
 We can naively think that the Tensor type parameter can be used to serve both purposes (i.e. compile-time type safety
-and direct data access) but it is not possible because there is no guarantee its value matches a tensor type that can 
+and direct data access) but it is not possible because there is no guarantee its value matches a Java type that can 
 be used to access data in memory. In fact, the `Integer` value in the previous example is completely unrelated with what 
 an integer is in Java, it is simply used as an idiomatic alias to `INT32` TF data type. For this reason, you can
-have custom type classes, such as `Tensor<UInt8>`, that insure type safety between `UInt8` operands, but you cannot 
+have custom type classes, such as `Tensor<UInt8>`, that ensure type safety between `UInt8` operands, but you cannot 
 read a `UInt8` value from memory, you actually read a `Byte`. 
 
 Since the parameter of the `NdArray` must be the Java type of the data stored in memory, since `Tensor` needs
 to implement the `NdArray` interface to allow direct I/O operations, and since we carry the TF data type as a
-parameter to `Tensor` for type safety, we would end up needing two generic types in the `Tensor`
+parameter to `Tensor` for operand type safety, we would end up needing two generic types in the `Tensor`
 signature, e.g. `Tensor<UInt8, Byte>` or `Tensor<Integer, Integer>`. 
 
 This can start to be annoying pretty fast. The current proposal main purpose is to avoid the hassle of carrying
@@ -79,7 +79,7 @@ public final class TUInt8 extends Tensor<Byte> implements Numeric { ... }
 public final class TString extends Tensor<String> { ... }
 ```
 
-To support compile-time type safety in the operands of a TF operations, we can carry that concrete type name
+To continue to support compile-time type safety in the operands of a TF operations, we carry that concrete type name
 as a parameter to the operations (instead of the actual idiomatic aliases).
 
 ```java
@@ -123,7 +123,7 @@ This way, you can pass a data type as an attribute to an operation by accessing 
 of the tensor class that represents this type, with no enum conversion needed. For example, 
 `Placeholder<TInt32> p = tf.placeholder(TInt32.DTYPE)`.
 
-Sometimes, we still need a supported `DataType` from an ordinal value returned by TensorFlow C++ core. 
+Sometimes, we still need to find a supported `DataType` from an ordinal value returned by TensorFlow C++ core. 
 In this case, we have no choice but to have a revert lookup method, something like `DataTypes.valueOf(int ordinal)`. 
 Fortunately, this is more a requirement internal to the TF Java core client and shouldn't be needed by the users.
 
@@ -169,8 +169,8 @@ public class TInt32 extends Tensor<Integer> implements Numeric {
 
 TInt32 matrix = TInt32.ofShape(2, 2).row(10, 12).row(32, 42).done();
 ```
-*Note: the `row` method in the previous example does not exist yet in the actual NIO RFC and is an addendum to this 
-RFC that can be consulted at the end of this document*
+*Note: the `row` method in the previous example does not exist in the previously presented `NdArray` interface
+and is an addendum to this RFC that can be consulted at the end of this document*
 
 Also, for convenience, nothing prevent us to have more factory methods in those classes, to allocate tensors
 of known shapes or to copy existing N-dimensional data into a new tensor.
@@ -204,14 +204,14 @@ TInt32 copyOfMatrix = TInt32.copyOf(matrix);  // given 'matrix' from the previou
 For constant allocation, the actual form of accepting a Java constant in parameter to the `tf.constant()` method is 
 very intuitive and concise (e.g. `tf.constant(0)`, where `tf` is an instance of `Ops`).
 We should not introduce more complexity unless needed. Plus, it can be generally safe
-to assume that when dealing with constants, we can map implicitely a given Java type to a TF data type
+to assume that when dealing with constants, we can map implicitely a given Java type to a common TF data type
 (e.g. a `int` value generates a `TInt32` constant, a `float` value generates a `TFloat` constant, etc.), while allowing
 the user to force a different data type if needed.
 
 The underlying implementation though must be changed to avoid using reflective techniques to generate the tensor and
-must be more explicit. To simplify this task, we should limit the possible "short-cut" factories to rank-0 or rank-1
-constants (which satisfies most of the cases) and passing explicitly a `Tensor` instance for constant of a higher rank. 
-For example:
+must be more explicit. To simplify this task, we should limit the possible factories to rank-0 or rank-1
+constants (which satisfies most of the cases) and another to pass explicitly a `Tensor` instance for constant of a 
+higher rank. For example:
 
 ```java
 public final class Constant<U> extends PrimitiveOp {
@@ -244,21 +244,25 @@ Constant<TInt32> matrix = tf.constant(TInt32.ofShape(2, 2).row(10, 11).row(30, 4
 In some previous examples, some tensors are initialize using a new method called `row`. This method is intented
 to be added to the original [`NdArray` API](https://github.com/karllessard/community/blob/master/sigs/jvm/rfcs/20190606-java-tensor-io.md#ndarray-api)
 submitted in the previous RFC, with the objective of allowing the allocation and initialization
-of a small tensor in a single line that mimics what standard multidimensional Java arrays.
+of a small tensor in a single line to mimics standard multidimensional Java arrays.
 
-The idea is to initialize data of each row of the `NdArray` individually as a sequence by calling `row(...)`, 
+The idea is to initialize the data of each row of the `NdArray` sequentially by invoking `row(...)`, 
 and then invoke the `done()` method to return the newly allocated `NdArray` instance. A "row" in this terminology
-means all vectors on the last axis (dimension) of an array.
+means a vector on the last axis (dimension) of an array.
 
-Let's compare standard Java arrays with those new methods as they are used by tensors:
+Let's compare standard Java arrays with those new methods as they are used with tensors:
 ```java
 
 // Create a 2D matrix
+
 int[][] matrix2d_s = new int[][] { {1, 2}, {3, 4} };
+
 TInt32 matrix2d_t = TInt32.ofShape(2, 2).row(1, 2).row(3, 4).done();
 
 // Create a 3D matrix
+
 int[][][] matrix3d_s = new int[][][] { { {1, 2}, {3, 4} }, { {5, 6}, {7, 8} }, { {9, 10}, {11, 12} } };
+
 TInt32 matrix3d_t = TInt32.ofShape(3, 2, 2)
   .row(1, 2).row(3, 4)
   .row(5, 6).row(7, 8)
@@ -266,17 +270,17 @@ TInt32 matrix3d_t = TInt32.ofShape(3, 2, 2)
   .done();
 ```
 Of course, the standard Java arrays gives a better view on where is located a given row, by embedding it
-through a series of brackets. The actual proposal is focusing on simplicity and performance more that readability
-but please, feel free to suggest any better solution.
+through a series of brackets. The actual proposal is focusing on simplicity and performance more that readability.
+*Please, feel free to suggest any better solution.*
 
 Note also that an advantage of using `NdArray` is that the type and the shape of the tensor is explicit and can be easily 
 retrieved by calling `t.dataType()` and `t.shape()` respectively, while with standard Java arrays those need
-to be inferred and discovered from the TF Java client using costly reflections and navigating through the array.
+to be inferred and discovered by the TF Java client using costly reflections and navigating through the array.
 
 ### Custom Tensor Types
 
 It has been reported that in some cases, supporting compile-time type safety can become a nightmare when 
-testing a network using different datatypes. Actually, this can require a lot of search & replace on each 
+testing a network using different data types. Actually, this can require a lot of search & replace on each 
 experiment (e.g. `FLOAT` vs `DOUBLE`). 
 
 The actual proposal could be extended to support registration of custom tensor types, so that a user can define
