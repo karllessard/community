@@ -275,7 +275,7 @@ through a series of brackets. The actual proposal is focusing on simplicity and 
 
 Note also that an advantage of using `NdArray` is that the type and the shape of the tensor is explicit and can be easily 
 retrieved by calling `t.dataType()` and `t.shape()` respectively, while with standard Java arrays those need
-to be inferred and discovered by the TF Java client using costly reflections and navigating through the array.
+to be inferred and discovered by the TF Java client using reflection and a costly navigation through the whole array.
 
 ### Custom Tensor Types
 
